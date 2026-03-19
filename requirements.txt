@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+psycopg2-binary
+sqlalchemy
+pytz
+face_recognition
+opencv-python-headless
+pandas
+numpy

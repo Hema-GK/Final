@@ -1,0 +1,3 @@
+semester,section,day,start_time,end_time,subject,teacher_name,classroom_name,classroom_length_m,classroom_width_m,latitude,longitude,attendance_radius_m,is_lunch_break
+5,B,Friday,15:40,15:50,Data Structures,Dr Smith,CRC 101,10,8,12.9716,77.5946,100,no
+5,A,Friday,15:24,15:34,Operating Systems,Dr Ravi,CRC 102,10,8,12.9716,77.5946,100,no

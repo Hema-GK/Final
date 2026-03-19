@@ -1,0 +1,2 @@
+semester,section,day,start_time,end_time,subject,teacher_id,teacher_name,classroom,length,width,latitude,longitude,radius,is_lunch
+5,A,Friday,15:40,16:40,Operating Systems,1,Dr Ravi,Room101,10,10,12.9716,77.5946,1000,0

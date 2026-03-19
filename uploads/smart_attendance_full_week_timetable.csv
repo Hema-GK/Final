@@ -1,0 +1,49 @@
+semester,section,day,start_time,end_time,subject,teacher_name,classroom_name,classroom_length_m,classroom_width_m,latitude,longitude,attendance_radius_m,is_lunch_break
+5,A,Monday,09:30,10:30,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,10:30,11:30,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,11:45,12:45,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,12:45,13:45,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Monday,14:45,15:45,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Monday,15:45,16:45,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,09:30,10:30,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,10:30,11:30,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,11:45,12:45,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,12:45,13:45,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Tuesday,14:45,15:45,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Tuesday,15:45,16:45,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,09:30,10:30,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,10:30,11:30,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,11:45,12:45,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,12:45,13:45,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Wednesday,14:45,15:45,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Wednesday,15:45,16:45,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,09:30,10:30,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,10:30,11:30,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,11:45,12:45,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,12:45,13:45,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Thursday,14:45,15:45,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Thursday,15:45,16:45,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,09:30,10:30,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,10:30,11:30,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,11:45,12:45,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,12:45,13:45,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Friday,14:45,15:45,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Friday,15:45,16:45,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,09:30,10:30,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,10:30,11:30,Operating Systems,Dr Meena,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,11:30,11:45,Break,,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,11:45,12:45,DBMS,Dr Arun,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,12:45,13:45,Computer Networks,Dr Kavya,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,13:45,14:45,Lunch Break,,CRC101,8,6,12.9716,77.5946,25,Yes
+5,A,Saturday,14:45,15:45,AI,Dr Rahul,CRC101,8,6,12.9716,77.5946,25,No
+5,A,Saturday,15:45,16:45,Data Structures,Dr Ravi,CRC101,8,6,12.9716,77.5946,25,No

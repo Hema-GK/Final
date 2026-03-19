@@ -1,0 +1,2 @@
+semester,section,day,start_time,end_time,subject,teacher_name,classroom_name,classroom_length_m,classroom_width_m,latitude,longitude,attendance_radius_m,is_lunch_break
+5,A,Thursday,19:16,19:45,Data Structures,Dr Ravi,Room101,10,8,12.9716,77.5946,50,No

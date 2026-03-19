@@ -1,0 +1,4 @@
+semester,section,day,start_time,end_time,subject,teacher_name,classroom_name,classroom_length_m,classroom_width_m,latitude,longitude,attendance_radius_m,is_lunch_break
+5,A,Thursday,18:32,19:22,Data Structures,Dr Ravi,CR101,8,6,12.9716,77.5946,30,No
+5,A,Thursday,19:27,20:17,Operating Systems,Dr Meena,CR102,10,7,12.9717,77.5947,30,No
+5,A,Thursday,20:22,20:52,Lunch Break,None,CAFETERIA,20,15,12.9718,77.5948,40,Yes
