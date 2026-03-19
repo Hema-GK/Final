@@ -22,12 +22,14 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
 
     # Use the 'classroom' name from the DB to find the Polygon center in CSV
     # Radius set to 15 meters (standard classroom size)
-    allowed = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=15)
+    # Unpack both the boolean 'allowed' and the 'dist'
+    allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=15)
 
     if not allowed:
         return {
             "status": "failed", 
-            "message": f"You are not inside {timetable.classroom}. Please stay in the room."
+            "message": f"You are outside the zone.",
+            "distance": dist 
         }
 
     # ... [Your existing duplicate check and Attendance save logic here] ...

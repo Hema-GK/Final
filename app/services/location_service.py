@@ -1,5 +1,5 @@
-import pandas as pd
 import json
+import pandas as pd
 import os
 import math
 from app.models.classroom_polygon import ClassroomPolygon # Ensure this path is correct
@@ -42,12 +42,26 @@ def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_li
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
     if not room or not room.polygon:
-        return False, 0 # Return 0 if room not found
+        return False, 0
 
-    coords = room.polygon 
-    center_lat = sum(float(p[0]) for p in coords) / len(coords)
-    center_lon = sum(float(p[1]) for p in coords) / len(coords)
+    # FIX: If the polygon is a string, convert it to a list
+    coords = room.polygon
+    if isinstance(coords, str):
+        try:
+            coords = json.loads(coords)
+        except Exception as e:
+            print(f"Data Error: Could not parse polygon string: {e}")
+            return False, 0
 
+    # Now p[0] will correctly be a number, not a '[' character
+    try:
+        center_lat = sum(float(p[0]) for p in coords) / len(coords)
+        center_lon = sum(float(p[1]) for p in coords) / len(coords)
+    except (ValueError, TypeError, IndexError) as e:
+        print(f"Calculation Error: {e}")
+        return False, 0
+
+    # Haversine Formula
     R = 6371000 
     phi1, phi2 = math.radians(s_lat), math.radians(center_lat)
     dphi = math.radians(center_lat - s_lat)
@@ -57,5 +71,4 @@ def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_li
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     distance = R * c
 
-    # Returns a tuple: (Is inside?, Actual Distance in meters)
     return (distance <= radius_limit), round(distance, 2)
