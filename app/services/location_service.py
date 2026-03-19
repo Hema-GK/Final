@@ -38,22 +38,17 @@ def get_polygon_center(room_name):
         print(f"Error parsing polygon for {room_name}: {e}")
         return None
 
-def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=15):
-    # Fetching from the table shown in your pgAdmin screenshot
+def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=25):
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
     if not room or not room.polygon:
-        return False
+        return False, 0 # Return 0 if room not found
 
-    # Using the 'polygon' JSON column from your DB screenshot
     coords = room.polygon 
-    
-    # Calculate Center (Centroid)
-    center_lat = sum(p[0] for p in coords) / len(coords)
-    center_lon = sum(p[1] for p in coords) / len(coords)
+    center_lat = sum(float(p[0]) for p in coords) / len(coords)
+    center_lon = sum(float(p[1]) for p in coords) / len(coords)
 
-    # Haversine distance formula
-    R = 6371000  # Radius of Earth in meters
+    R = 6371000 
     phi1, phi2 = math.radians(s_lat), math.radians(center_lat)
     dphi = math.radians(center_lat - s_lat)
     dlambda = math.radians(center_lon - s_lon)
@@ -62,4 +57,5 @@ def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_li
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     distance = R * c
 
-    return distance <= radius_limit
+    # Returns a tuple: (Is inside?, Actual Distance in meters)
+    return (distance <= radius_limit), round(distance, 2)
