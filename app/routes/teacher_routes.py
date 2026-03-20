@@ -75,22 +75,37 @@ def today_classes(teacher_id: int, db: Session = Depends(get_db)):
 
 
 # UPDATE LOCATION
-@router.post("/update-location")
-def update_location(data: dict, db: Session = Depends(get_db)):
+# UPDATE CLASSROOM NAME & COORDINATES
+@router.post("/update-classroom")
+def update_classroom(data: dict, db: Session = Depends(get_db)):
+    timetable_id = data.get("timetable_id")
+    new_room_name = data.get("classroom_name")
 
-    timetable = db.query(Timetable).filter(
-        Timetable.id == data["class_id"]
-    ).first()
-
+    # 1. Find the timetable entry
+    timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
-        return {"status": "failed", "message": "Class not found"}
+        raise HTTPException(status_code=404, detail="Timetable entry not found")
 
-    timetable.temp_latitude = float(data["latitude"])
-    timetable.temp_longitude = float(data["longitude"])
+    # 2. Find the classroom in your database to get its predefined polygons/coords
+    # Assuming you have a model named 'Classroom'
+    from app.models.classroom import Classroom # Adjust import based on your project
+    target_room = db.query(Classroom).filter(Classroom.name.ilike(new_room_name)).first()
+
+    if not target_room:
+        return {"status": "failed", "message": f"Room '{new_room_name}' not found in database"}
+
+    # 3. Update the timetable with the new room name and its stored coordinates
+    timetable.classroom = target_room.name
+    timetable.temp_latitude = target_room.latitude
+    timetable.temp_longitude = target_room.longitude
 
     db.commit()
 
-    return {"status": "Location updated successfully"}
+    return {
+        "status": "success", 
+        "message": f"Class moved to {target_room.name}",
+        "new_room": target_room.name
+    }
 
 
 # VIEW ATTENDANCE
