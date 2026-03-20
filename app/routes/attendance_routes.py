@@ -60,10 +60,10 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: int, db: Session = Depends(get_db)):
-    # This fetches all attendance records for a specific student ID
+    # Join with Timetable to get the Subject Name for the table
     history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
     
-    # Optional: If you want to include subject names from the timetable join
-    # history = db.query(Attendance).join(Timetable).filter(Attendance.student_id == student_id).all()
+    # If your Attendance model has a relationship with Timetable:
+    return [{"subject": a.timetable.subject, "date": a.date, "status": "Present"} for a in history]
     
-    return history
+   
