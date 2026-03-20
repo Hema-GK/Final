@@ -41,25 +41,26 @@ def get_polygon_center(room_name):
 def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=25):
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
+    # FIX: Provide a clear error if room data is missing
     if not room or not room.polygon:
-        return False, 0
+        print(f"Room {room_name} missing from database")
+        return False, "Data Missing" 
 
-    # FIX: If the polygon is a string, convert it to a list
     coords = room.polygon
     if isinstance(coords, str):
         try:
             coords = json.loads(coords)
         except Exception as e:
-            print(f"Data Error: Could not parse polygon string: {e}")
-            return False, 0
+            return False, "Invalid Format"
 
-    # Now p[0] will correctly be a number, not a '[' character
     try:
+        # Check if coords list is empty to avoid division by zero
+        if not coords: return False, "No Coords"
+        
         center_lat = sum(float(p[0]) for p in coords) / len(coords)
         center_lon = sum(float(p[1]) for p in coords) / len(coords)
-    except (ValueError, TypeError, IndexError) as e:
-        print(f"Calculation Error: {e}")
-        return False, 0
+    except Exception as e:
+        return False, "Calc Error"
 
     # Haversine Formula
     R = 6371000 
