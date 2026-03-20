@@ -62,14 +62,17 @@ def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_li
     except Exception as e:
         return False, "Calc Error"
 
-    # Haversine Formula
-    R = 6371000 
-    phi1, phi2 = math.radians(s_lat), math.radians(center_lat)
-    dphi = math.radians(center_lat - s_lat)
-    dlambda = math.radians(center_lon - s_lon)
+        # Haversine Formula
+        R = 6371000 
+        
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
 
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    distance = R * c
+        # Haversine formula for high-precision distance
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        distance = R * c
 
-    return (distance <= radius_limit), round(distance, 2)
+        # If distance is exactly 0 (same spot), it's still valid
+        return (distance <= radius), float(distance)
