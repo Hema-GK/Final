@@ -66,4 +66,37 @@ def get_student_history(student_id: int, db: Session = Depends(get_db)):
     # If your Attendance model has a relationship with Timetable:
     return [{"subject": a.timetable.subject, "date": a.date, "status": "Present"} for a in history]
     
-   
+
+@router.get("/analytics/{teacher_id}")
+def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
+    """
+    Returns data formatted for the frontend BarChart:
+    [{"usn": "1MS21CS001", "present": 10, "absent": 2}, ...]
+    """
+    
+    # 1. Find all timetable IDs belonging to this teacher
+    class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
+    class_id_list = [c[0] for c in class_ids]
+
+    if not class_id_list:
+        return []
+
+    # 2. Query attendance records for those classes
+    # We group by student_id (or USN) and count the statuses
+    results = db.query(
+        Attendance.student_id,
+        func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
+        func.count(Attendance.id).filter(Attendance.status == "Absent").label("absent")
+    ).filter(Attendance.timetable_id.in_(class_id_list))\
+     .group_by(Attendance.student_id).all()
+
+    # 3. Format for Recharts (Frontend expects 'usn' or 'student_id')
+    chart_data = []
+    for row in results:
+        chart_data.append({
+            "usn": f"ID: {row[0]}", # Or row.student_id if you have a USN field
+            "present": row.present,
+            "absent": row.absent
+        })
+
+    return chart_data
