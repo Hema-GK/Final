@@ -1,78 +1,133 @@
+# import json
+# import pandas as pd
+# import os
+# import math
+# from app.models.classroom_polygon import ClassroomPolygon # Ensure this path is correct
+# from sqlalchemy.orm import Session
+
+# # Path to your CSV file on the server
+# CSV_PATH = "app/data/room_polygons.csv"
+
+# def get_polygon_center(room_name):
+#     """
+#     Reads the CSV and returns the (lat, lon) center of the room's polygon.
+#     """
+#     if not os.path.exists(CSV_PATH):
+#         print("Error: room_polygons.csv not found!")
+#         return None
+
+#     df = pd.read_csv(CSV_PATH)
+    
+#     # Filter for the specific room
+#     room_data = df[df['room_name'].str.strip().str.lower() == room_name.strip().lower()]
+    
+#     if room_data.empty:
+#         print(f"Room {room_name} not found in CSV")
+#         return None
+
+#     # Assuming 'polygon_coords' is stored as a JSON string: "[[lat, lon], [lat, lon]...]"
+#     try:
+#         coords = json.loads(room_data.iloc[0]['polygon_coords'])
+        
+#         # Calculate the mathematical center (Centroid)
+#         center_lat = sum(p[0] for p in coords) / len(coords)
+#         center_lon = sum(p[1] for p in coords) / len(coords)
+        
+#         return center_lat, center_lon
+#     except Exception as e:
+#         print(f"Error parsing polygon for {room_name}: {e}")
+#         return None
+
+# def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=25):
+#     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
+    
+#     # FIX: Provide a clear error if room data is missing
+#     if not room or not room.polygon:
+#         print(f"Room {room_name} missing from database")
+#         return False, "Data Missing" 
+
+#     coords = room.polygon
+#     if isinstance(coords, str):
+#         try:
+#             coords = json.loads(coords)
+#         except Exception as e:
+#             return False, "Invalid Format"
+
+#     try:
+#         # Check if coords list is empty to avoid division by zero
+#         if not coords: return False, "No Coords"
+        
+#         center_lat = sum(float(p[0]) for p in coords) / len(coords)
+#         center_lon = sum(float(p[1]) for p in coords) / len(coords)
+#     except Exception as e:
+#         return False, "Calc Error"
+
+#         # Haversine Formula
+#         R = 6371000 
+        
+#         phi1, phi2 = math.radians(lat1), math.radians(lat2)
+#         dphi = math.radians(lat2 - lat1)
+#         dlambda = math.radians(lon2 - lon1)
+
+#         # Haversine formula for high-precision distance
+#         a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+#         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+#         distance = R * c
+
+#         # If distance is exactly 0 (same spot), it's still valid
+#         return (distance <= radius), float(distance)
+
+
 import json
-import pandas as pd
-import os
 import math
-from app.models.classroom_polygon import ClassroomPolygon # Ensure this path is correct
+from app.models.classroom_polygon import ClassroomPolygon
 from sqlalchemy.orm import Session
 
-# Path to your CSV file on the server
-CSV_PATH = "app/data/room_polygons.csv"
-
-def get_polygon_center(room_name):
+def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=30.0):
     """
-    Reads the CSV and returns the (lat, lon) center of the room's polygon.
+    Calculates if a student is within the radius of a classroom center.
+    Default radius increased to 30.0m to account for indoor GPS drift.
     """
-    if not os.path.exists(CSV_PATH):
-        print("Error: room_polygons.csv not found!")
-        return None
-
-    df = pd.read_csv(CSV_PATH)
-    
-    # Filter for the specific room
-    room_data = df[df['room_name'].str.strip().str.lower() == room_name.strip().lower()]
-    
-    if room_data.empty:
-        print(f"Room {room_name} not found in CSV")
-        return None
-
-    # Assuming 'polygon_coords' is stored as a JSON string: "[[lat, lon], [lat, lon]...]"
-    try:
-        coords = json.loads(room_data.iloc[0]['polygon_coords'])
-        
-        # Calculate the mathematical center (Centroid)
-        center_lat = sum(p[0] for p in coords) / len(coords)
-        center_lon = sum(p[1] for p in coords) / len(coords)
-        
-        return center_lat, center_lon
-    except Exception as e:
-        print(f"Error parsing polygon for {room_name}: {e}")
-        return None
-
-def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=25):
+    # 1. Fetch room from Database
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
-    # FIX: Provide a clear error if room data is missing
     if not room or not room.polygon:
-        print(f"Room {room_name} missing from database")
-        return False, "Data Missing" 
+        print(f"Room {room_name} missing from database or polygon data is empty.")
+        # Return 0.0 distance to satisfy unpacking in routes
+        return False, 0.0
 
+    # 2. Parse coordinates (assumes JSON format like [[lat, lon], ...])
     coords = room.polygon
     if isinstance(coords, str):
         try:
             coords = json.loads(coords)
         except Exception as e:
-            return False, "Invalid Format"
+            print(f"JSON Parsing Error: {e}")
+            return False, 0.0
+
+    if not coords or len(coords) == 0:
+        return False, 0.0
 
     try:
-        # Check if coords list is empty to avoid division by zero
-        if not coords: return False, "No Coords"
-        
+        # 3. Calculate Centroid (Center Point of the room)
         center_lat = sum(float(p[0]) for p in coords) / len(coords)
         center_lon = sum(float(p[1]) for p in coords) / len(coords)
-    except Exception as e:
-        return False, "Calc Error"
 
-        # Haversine Formula
-        R = 6371000 
+        # 4. Haversine Formula for high-precision distance in meters
+        R = 6371000  # Earth radius in meters
         
-        phi1, phi2 = math.radians(lat1), math.radians(lat2)
-        dphi = math.radians(lat2 - lat1)
-        dlambda = math.radians(lon2 - lon1)
+        phi1 = math.radians(center_lat)
+        phi2 = math.radians(s_lat)
+        dphi = math.radians(s_lat - center_lat)
+        dlambda = math.radians(s_lon - center_lon)
 
-        # Haversine formula for high-precision distance
         a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         distance = R * c
 
-        # If distance is exactly 0 (same spot), it's still valid
-        return (distance <= radius), float(distance)
+        # 5. Return (Is inside?, Exact distance)
+        return (distance <= radius_limit), round(float(distance), 2)
+
+    except Exception as e:
+        print(f"Calculation Error in location_service: {e}")
+        return False, 0.0
