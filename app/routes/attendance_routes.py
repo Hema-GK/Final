@@ -57,3 +57,13 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "success", "message": "Attendance marked successfully"}
+
+@router.get("/student/{student_id}")
+def get_student_history(student_id: int, db: Session = Depends(get_db)):
+    # This fetches all attendance records for a specific student ID
+    history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+    
+    # Optional: If you want to include subject names from the timetable join
+    # history = db.query(Attendance).join(Timetable).filter(Attendance.student_id == student_id).all()
+    
+    return history
