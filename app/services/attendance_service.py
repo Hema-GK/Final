@@ -180,7 +180,9 @@ def mark_attendance(image, latitude, longitude, db: Session):
 
     # 4. CRITICAL: Location Validation (Re-enabled)
     # Using a 25.0m default if radius isn't specified to account for indoor drift
-    allowed_radius = float(current_class.radius) if current_class.radius else 25.0
+    # allowed_radius = float(current_class.radius) if current_class.radius else 25.
+    allowed_radius =  30.0
+
     
     is_in, distance = check_radius_from_polygon_db(
         float(latitude),
