@@ -41,45 +41,52 @@
 #         print(f"Geofencing Error: {e}")
 #         return False, 0.0
 
-
 import json
+import math
 from shapely.geometry import Point, Polygon
 from app.models.classroom_polygon import ClassroomPolygon
 from sqlalchemy.orm import Session
 
 def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session):
     """
-    Checks if student is inside the classroom polygon PLUS a 10m buffer.
+    Checks if student is inside the classroom polygon boundary.
+    Fixed to prevent 'unverified distance' errors.
     """
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
     if not room or not room.polygon:
+        print(f"Room {room_name} not found or polygon is empty.")
         return False, 0.0
 
     try:
-        # 1. Parse coordinates
+        # 1. Parse coordinates from DB
         coords = json.loads(room.polygon) if isinstance(room.polygon, str) else room.polygon
         
-        # 2. Create Polygon (Lon, Lat)
-        # We must use (Lon, Lat) for Shapely geometry
-        raw_poly = Polygon([(p[1], p[0]) for p in coords])
-        
-        # 3. Apply a 10-meter BUFFER to account for GPS drift seen in your images
-        # 0.0001 degrees is roughly 11 meters
-        buffered_poly = raw_poly.buffer(0.00009) 
-        
-        student_location = Point(s_lon, s_lat)
+        if not coords or len(coords) < 3:
+            return False, 0.0
 
-        # 4. Check containment in the BUFFERED zone
-        is_inside = buffered_poly.contains(student_location)
+        # 2. IMPORTANT: Shapely uses (x, y) which is (Longitude, Latitude)
+        # Your DB likely stores [Lat, Lon], so we MUST swap them here.
+        polygon_points = [(p[1], p[0]) for p in coords]
+        room_poly = Polygon(polygon_points)
         
-        # 5. Calculate distance to actual center for UI feedback
-        center = raw_poly.centroid
-        # Degrees to meters conversion
-        dist = student_location.distance(center) * 111320 
+        # 3. Add a 10m buffer (approx 0.00009 degrees) to prevent drift errors
+        buffered_poly = room_poly.buffer(0.00009)
         
-        return is_inside, round(dist, 2)
+        student_point = Point(s_lon, s_lat)
+
+        # 4. Verification check
+        is_inside = buffered_poly.contains(student_point)
+        
+        # 5. Calculate real distance for the error message
+        # We use a solid centroid to ensure 'dist' is never 'unknown'
+        center = room_poly.centroid
+        # Basic degree to meter conversion (1 degree ~ 111,320 meters)
+        dist = student_point.distance(center) * 111320
+        
+        return is_inside, round(float(dist), 2)
 
     except Exception as e:
-        print(f"Geofence Error: {e}")
+        print(f"Logic Error: {e}")
+        # Return a safe float 0.0 to prevent 'unverified' string errors
         return False, 0.0
