@@ -136,7 +136,9 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
 
     # 2. Location Verification
     # radius_limit=30.0 covers the 16.45m - 19.80m drift seen in your tests
-    allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=20.0)
+    # allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=20.0)
+    allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=10.0)
+
 
     if not allowed:
         # dist will be a float (e.g., 19.8), preventing 'unverified distance' error
