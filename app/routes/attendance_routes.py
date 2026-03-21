@@ -105,7 +105,6 @@
 
 
 
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
@@ -119,6 +118,7 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
+    # 1. Extract data from request
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
     
@@ -126,24 +126,25 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
     except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS coordinates."}
+        return {"status": "failed", "message": "Invalid GPS coordinates received from device."}
 
+    # 2. Validate Timetable Entry
     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
-        return {"status": "failed", "message": "Class session not found."}
+        return {"status": "failed", "message": "Class session not found in database."}
 
-    # Use the new Polygon Containment check
+    # 3. Automated Location Verification
+    # The service now automatically handles room dimensions (Small vs Large rooms)
     is_inside, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db)
 
     if not is_inside:
-        # If the student is outside, we show them how far they are from the center
         return {
             "status": "failed", 
-            "message": f"You are outside the classroom zone ({dist}m from center).",
+            "message": f"Geofencing Error: You are {dist}m away from the classroom zone.",
             "distance": dist 
         }
 
-    # [DUPLICATE CHECK AND SAVE LOGIC REMAINS THE SAME]
+    # 4. Prevent Duplicate Attendance (Same student, same class, same day)
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -151,22 +152,31 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked."}
+        return {"status": "failed", "message": "Attendance already marked for this class today."}
 
-    new_record = Attendance(
-        student_id=student_id,
-        timetable_id=timetable_id,
-        status="Present",
-        timestamp=datetime.now()
-    )
-    db.add(new_record)
-    db.commit()
-
-    return {"status": "success", "message": "Attendance marked!", "distance": dist}
+    # 5. Save Attendance Record
+    try:
+        new_record = Attendance(
+            student_id=student_id,
+            timetable_id=timetable_id,
+            status="Present",
+            timestamp=datetime.now()
+        )
+        db.add(new_record)
+        db.commit()
+        
+        return {
+            "status": "success", 
+            "message": "Attendance marked successfully!",
+            "distance": dist
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Database Error: {e}")
+        return {"status": "failed", "message": "Internal Server Error during saving."}
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: int, db: Session = Depends(get_db)):
-    # Returns the attendance history for a specific student
     history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
     return [
         {
@@ -178,18 +188,12 @@ def get_student_history(student_id: int, db: Session = Depends(get_db)):
 
 @router.get("/analytics/{teacher_id}")
 def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
-    """
-    Returns data formatted for the frontend BarChart:
-    [{"usn": "Student ID", "present": 10, "absent": 2}, ...]
-    """
-    # 1. Find all timetable IDs belonging to this teacher
     class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
     class_id_list = [c[0] for c in class_ids]
 
     if not class_id_list:
         return []
 
-    # 2. Query attendance records grouped by student
     results = db.query(
         Attendance.student_id,
         func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
