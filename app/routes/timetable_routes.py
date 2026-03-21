@@ -59,23 +59,75 @@
 #     }
 
 
+# from fastapi import APIRouter, Depends, HTTPException
+# from sqlalchemy.orm import Session
+# from datetime import datetime
+# from app.database import get_db
+# from app.models.timetable import Timetable
+# from app.models.teacher import Teacher  # Ensure this model is imported for the Join
+
+# router = APIRouter(prefix="/timetable", tags=["Timetable"])
+
+# @router.get("/current-class")
+# def get_current_class(db: Session = Depends(get_db)):
+#     # Get current time and day
+#     now = datetime.now()
+#     current_time = now.strftime("%H:%M:%S")
+#     current_day = now.strftime("%A")
+
+#     # Join Timetable with Teacher to get the 'teacher_name'
+#     active_class = db.query(
+#         Timetable.id,
+#         Timetable.subject,
+#         Timetable.classroom,
+#         Timetable.start_time,
+#         Timetable.end_time,
+#         Teacher.name.label("teacher_name")
+#     ).join(Teacher, Timetable.teacher_id == Teacher.id) \
+#      .filter(
+#         Timetable.day == current_day,
+#         Timetable.start_time <= current_time,
+#         Timetable.end_time >= current_time
+#     ).first()
+
+#     if not active_class:
+#         return {"status": "No Class", "message": "No class currently running"}
+
+#     # Return full details for the frontend header
+#     return {
+#         "status": "Class Active",
+#         "class": {
+#             "id": active_class.id,
+#             "subject": active_class.subject,
+#             "teacher_name": active_class.teacher_name,
+#             "classroom": active_class.classroom,
+#             "start_time": active_class.start_time,
+#             "end_time": active_class.end_time
+#         }
+#     }
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta # Added timedelta
 from app.database import get_db
 from app.models.timetable import Timetable
-from app.models.teacher import Teacher  # Ensure this model is imported for the Join
+from app.models.teacher import Teacher 
+from sqlalchemy import func
 
 router = APIRouter(prefix="/timetable", tags=["Timetable"])
 
 @router.get("/current-class")
 def get_current_class(db: Session = Depends(get_db)):
-    # Get current time and day
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
-    current_day = now.strftime("%A")
+    # 1. TIMEZONE FIX: Convert UTC to IST (+5:30)
+    # Railway servers use UTC. This ensures the check matches Indian time.
+    utc_now = datetime.utcnow()
+    ist_now = utc_now + timedelta(hours=5, minutes=30)
+    
+    current_time = ist_now.time() # This is a Python 'time' object
+    current_day = ist_now.strftime("%A") # e.g., 'Saturday'
 
-    # Join Timetable with Teacher to get the 'teacher_name'
+    # 2. Robust Query
+    # We use func.lower() to prevent case-sensitivity issues
     active_class = db.query(
         Timetable.id,
         Timetable.subject,
@@ -85,15 +137,18 @@ def get_current_class(db: Session = Depends(get_db)):
         Teacher.name.label("teacher_name")
     ).join(Teacher, Timetable.teacher_id == Teacher.id) \
      .filter(
-        Timetable.day == current_day,
+        func.lower(Timetable.day) == current_day.lower(),
         Timetable.start_time <= current_time,
         Timetable.end_time >= current_time
     ).first()
 
     if not active_class:
-        return {"status": "No Class", "message": "No class currently running"}
+        # Helpful debug message for your frontend
+        return {
+            "status": "No Class", 
+            "message": f"Nothing scheduled for {current_day} at {ist_now.strftime('%H:%M')}"
+        }
 
-    # Return full details for the frontend header
     return {
         "status": "Class Active",
         "class": {
@@ -101,7 +156,7 @@ def get_current_class(db: Session = Depends(get_db)):
             "subject": active_class.subject,
             "teacher_name": active_class.teacher_name,
             "classroom": active_class.classroom,
-            "start_time": active_class.start_time,
-            "end_time": active_class.end_time
+            "start_time": active_class.start_time.strftime("%H:%M") if active_class.start_time else None,
+            "end_time": active_class.end_time.strftime("%H:%M") if active_class.end_time else None
         }
     }

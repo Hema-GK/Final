@@ -59,6 +59,7 @@
 
 from sqlalchemy import Column, Integer, String, Text
 from app.database import Base
+from sqlalchemy.orm import relationship
 
 class Student(Base):
     __tablename__ = "students"
@@ -71,3 +72,4 @@ class Student(Base):
     password = Column(String(100))
     # This will store the 128-float array as a string
     face_encoding = Column(Text)
+    attendance_records = relationship("Attendance", back_populates="student")
