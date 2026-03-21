@@ -119,7 +119,6 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
-    # Extract data from request
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
     
@@ -127,29 +126,24 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
     except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS coordinates received."}
+        return {"status": "failed", "message": "Invalid GPS coordinates."}
 
-    # 1. Validate Timetable Entry
     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
-        return {"status": "failed", "message": "Class session not found in database."}
+        return {"status": "failed", "message": "Class session not found."}
 
-    # 2. Location Verification
-    # radius_limit=30.0 covers the 16.45m - 19.80m drift seen in your tests
-    # allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=20.0)
-    allowed, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db, radius_limit=25.0)
+    # Use the new Polygon Containment check
+    is_inside, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db)
 
-
-    if not allowed:
-        # dist will be a float (e.g., 19.8), preventing 'unverified distance' error
+    if not is_inside:
+        # If the student is outside, we show them how far they are from the center
         return {
             "status": "failed", 
-            "message": f"Geofencing Error: You are {dist}m away from the classroom center.",
+            "message": f"You are outside the classroom zone ({dist}m from center).",
             "distance": dist 
         }
 
-    # 3. Prevent Duplicate Attendance for the same student on the same day
-    # Assuming your Attendance model has a 'timestamp' column
+    # [DUPLICATE CHECK AND SAVE LOGIC REMAINS THE SAME]
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -157,28 +151,18 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked for this class today."}
+        return {"status": "failed", "message": "Attendance already marked."}
 
-    # 4. Save Attendance Record
-    try:
-        new_record = Attendance(
-            student_id=student_id,
-            timetable_id=timetable_id,
-            status="Present",
-            timestamp=datetime.now()
-        )
-        db.add(new_record)
-        db.commit()
-        
-        return {
-            "status": "success", 
-            "message": "Attendance marked successfully!",
-            "distance": dist
-        }
-    except Exception as e:
-        db.rollback()
-        print(f"Database Error: {e}")
-        return {"status": "failed", "message": "Internal Server Error during saving."}
+    new_record = Attendance(
+        student_id=student_id,
+        timetable_id=timetable_id,
+        status="Present",
+        timestamp=datetime.now()
+    )
+    db.add(new_record)
+    db.commit()
+
+    return {"status": "success", "message": "Attendance marked!", "distance": dist}
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: int, db: Session = Depends(get_db)):

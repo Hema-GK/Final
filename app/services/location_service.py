@@ -77,57 +77,45 @@
 #         # If distance is exactly 0 (same spot), it's still valid
 #         return (distance <= radius), float(distance)
 
-
 import json
-import math
+from shapely.geometry import Point, Polygon
 from app.models.classroom_polygon import ClassroomPolygon
 from sqlalchemy.orm import Session
 
-def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session, radius_limit=30.0):
+def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session):
     """
-    Calculates if a student is within the radius of a classroom center.
-    Default radius increased to 30.0m to account for indoor GPS drift.
+    Checks if the student's current GPS point is INSIDE the classroom polygon.
+    This is much more accurate than a radius check.
     """
-    # 1. Fetch room from Database
+    # 1. Fetch room boundary from DB
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     
     if not room or not room.polygon:
-        print(f"Room {room_name} missing from database or polygon data is empty.")
-        # Return 0.0 distance to satisfy unpacking in routes
+        print(f"Room {room_name} not configured in DB.")
         return False, 0.0
 
-    # 2. Parse coordinates (assumes JSON format like [[lat, lon], ...])
-    coords = room.polygon
-    if isinstance(coords, str):
-        try:
-            coords = json.loads(coords)
-        except Exception as e:
-            print(f"JSON Parsing Error: {e}")
+    # 2. Parse the polygon coordinates
+    try:
+        # Assuming format: [[lat, lon], [lat, lon], ...]
+        coords = json.loads(room.polygon) if isinstance(room.polygon, str) else room.polygon
+        
+        if not coords or len(coords) < 3:
             return False, 0.0
 
-    if not coords or len(coords) == 0:
-        return False, 0.0
+        # Create a Shapely Polygon (Note: Shapely uses (x, y) which is (lon, lat))
+        # We must be consistent with the order
+        room_polygon = Polygon([(p[1], p[0]) for p in coords])
+        student_point = Point(s_lon, s_lat)
 
-    try:
-        # 3. Calculate Centroid (Center Point of the room)
-        center_lat = sum(float(p[0]) for p in coords) / len(coords)
-        center_lon = sum(float(p[1]) for p in coords) / len(coords)
-
-        # 4. Haversine Formula for high-precision distance in meters
-        R = 6371000  # Earth radius in meters
+        # 3. Check if point is inside
+        is_inside = room_polygon.contains(student_point)
         
-        phi1 = math.radians(center_lat)
-        phi2 = math.radians(s_lat)
-        dphi = math.radians(s_lat - center_lat)
-        dlambda = math.radians(s_lon - center_lon)
-
-        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        distance = R * c
-
-        # 5. Return (Is inside?, Exact distance)
-        return (distance <= radius_limit), round(float(distance), 2)
+        # 4. Optional: Calculate distance to center for the error message
+        center = room_polygon.centroid
+        dist_to_center = student_point.distance(center) * 111320 # Convert degrees to approx meters
+        
+        return is_inside, round(dist_to_center, 2)
 
     except Exception as e:
-        print(f"Calculation Error in location_service: {e}")
+        print(f"Geofencing Error: {e}")
         return False, 0.0
