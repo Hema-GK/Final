@@ -105,10 +105,121 @@
 
 
 
+# from fastapi import APIRouter, Depends, HTTPException
+# from sqlalchemy.orm import Session
+# from datetime import datetime, date
+# from app.services.location_service import check_radius_from_polygon_db
+# from app.database import get_db
+# from app.models.attendance import Attendance
+# from app.models.timetable import Timetable
+# from sqlalchemy import func
+
+# router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+# @router.post("/mark")
+# def mark_attendance(data: dict, db: Session = Depends(get_db)):
+#     # 1. Extract data from request
+#     student_id = data.get("student_id")
+#     timetable_id = data.get("timetable_id")
+    
+#     try:
+#         lat = float(data.get("latitude"))
+#         lon = float(data.get("longitude"))
+#     except (TypeError, ValueError):
+#         return {"status": "failed", "message": "Invalid GPS coordinates received from device."}
+
+#     # 2. Validate Timetable Entry
+#     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+#     if not timetable:
+#         return {"status": "failed", "message": "Class session not found in database."}
+
+#     # 3. Automated Location Verification
+#     # The service now automatically handles room dimensions (Small vs Large rooms)
+#     is_inside, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db)
+
+#     if not is_inside:
+#         return {
+#             "status": "failed", 
+#             "message": f"Geofencing Error: You are {dist}m away from the classroom zone.",
+#             "distance": dist 
+#         }
+
+#     # 4. Prevent Duplicate Attendance (Same student, same class, same day)
+#     existing = db.query(Attendance).filter(
+#         Attendance.student_id == student_id,
+#         Attendance.timetable_id == timetable_id,
+#         func.date(Attendance.timestamp) == date.today()
+#     ).first()
+
+#     if existing:
+#         return {"status": "failed", "message": "Attendance already marked for this class today."}
+
+#     # 5. Save Attendance Record
+#     try:
+#         new_record = Attendance(
+#             student_id=student_id,
+#             timetable_id=timetable_id,
+#             status="Present",
+#             timestamp=datetime.now()
+#         )
+#         db.add(new_record)
+#         db.commit()
+        
+#         return {
+#             "status": "success", 
+#             "message": "Attendance marked successfully!",
+#             "distance": dist
+#         }
+#     except Exception as e:
+#         db.rollback()
+#         print(f"Database Error: {e}")
+#         return {"status": "failed", "message": "Internal Server Error during saving."}
+
+# @router.get("/student/{student_id}")
+# def get_student_history(student_id: int, db: Session = Depends(get_db)):
+#     history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+#     return [
+#         {
+#             "subject": a.timetable.subject if a.timetable else "Unknown", 
+#             "date": a.timestamp.strftime("%Y-%m-%d"), 
+#             "status": a.status
+#         } for a in history
+#     ]
+
+# @router.get("/analytics/{teacher_id}")
+# def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
+#     class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
+#     class_id_list = [c[0] for c in class_ids]
+
+#     if not class_id_list:
+#         return []
+
+#     results = db.query(
+#         Attendance.student_id,
+#         func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
+#         func.count(Attendance.id).filter(Attendance.status == "Absent").label("absent")
+#     ).filter(Attendance.timetable_id.in_(class_id_list))\
+#      .group_by(Attendance.student_id).all()
+
+#     return [
+#         {
+#             "usn": f"Student {row.student_id}", 
+#             "present": row.present, 
+#             "absent": row.absent
+#         } for row in results
+#     ]
+
+
+
+
+
+
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
-from app.services.location_service import check_radius_from_polygon_db
+# NOTE: We changed the function name here to match the new Polygon logic
+from app.services.location_service import verify_location_in_polygon
 from app.database import get_db
 from app.models.attendance import Attendance
 from app.models.timetable import Timetable
@@ -133,11 +244,12 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     if not timetable:
         return {"status": "failed", "message": "Class session not found in database."}
 
-    # 3. Automated Location Verification
-    # The service now automatically handles room dimensions (Small vs Large rooms)
-    is_inside, dist = check_radius_from_polygon_db(lat, lon, timetable.classroom, db)
+    # 3. Polygon Geofencing Verification
+    # Returns: is_inside (Boolean), dist_to_center (Float)
+    is_inside, dist = verify_location_in_polygon(lat, lon, timetable.classroom, db)
 
-    if not is_inside:
+    # LOGIC: Success if INSIDE the 4 corners OR within 10 meters of center (GPS buffer)
+    if not (is_inside or dist <= 10.0):
         return {
             "status": "failed", 
             "message": f"Geofencing Error: You are {dist}m away from the classroom zone.",
@@ -167,7 +279,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         
         return {
             "status": "success", 
-            "message": "Attendance marked successfully!",
+            "message": "Attendance marked successfully! ✅",
             "distance": dist
         }
     except Exception as e:
@@ -188,6 +300,7 @@ def get_student_history(student_id: int, db: Session = Depends(get_db)):
 
 @router.get("/analytics/{teacher_id}")
 def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
+    # Find all classes belonging to this teacher
     class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
     class_id_list = [c[0] for c in class_ids]
 
@@ -203,7 +316,7 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
 
     return [
         {
-            "usn": f"Student {row.student_id}", 
+            "student_id": row.student_id, 
             "present": row.present, 
             "absent": row.absent
         } for row in results
