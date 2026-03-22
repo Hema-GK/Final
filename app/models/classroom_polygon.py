@@ -8,7 +8,7 @@ class ClassroomPolygon(Base):
     classroom = Column(String(50), unique=True, index=True)
     polygon = Column(JSON)  # Stores [[lat, lon], ...]
     
-    # ADD THESE THREE LINES BELOW:
-    center_lat = Column(Float, nullable=True)
-    center_lon = Column(Float, nullable=True)
-    calculated_radius = Column(Float, nullable=True)
+    # # ADD THESE THREE LINES BELOW:
+    # center_lat = Column(Float, nullable=True)
+    # center_lon = Column(Float, nullable=True)
+    # calculated_radius = Column(Float, nullable=True)
