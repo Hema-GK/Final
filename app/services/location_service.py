@@ -68,14 +68,23 @@
 #         return False, 0.0
 
 
-
 import json
+import math
 from sqlalchemy.orm import Session
 from app.models.classroom_polygon import ClassroomPolygon
-from .location_service import calculate_haversine # Ensure this import works
+
+def calculate_haversine(lat1, lon1, lat2, lon2):
+    """Calculates the distance between two points in meters."""
+    R = 6371000  # Earth radius in meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    
+    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 def is_inside_polygon(x, y, poly):
-    """Ray Casting Algorithm: Checks if point (x,y) is inside polygon 'poly'"""
+    """Ray Casting Algorithm: Checks if point (x,y) is inside polygon 'poly'."""
     n = len(poly)
     inside = False
     p1x, p1y = poly[0]
@@ -96,14 +105,14 @@ def verify_location_in_polygon(s_lat, s_lon, room_name, db: Session):
     if not room or not room.polygon:
         return False, 0.0
 
-    # Load corners from DB
+    # Parse the polygon corners
     coords = json.loads(room.polygon)
     
-    # Mathematical Check
+    # 1. Check if inside the 4 corners
     is_inside = is_inside_polygon(s_lat, s_lon, coords)
     
-    # Distance to center (for the error message)
-    dist = calculate_haversine(room.center_lat, room.center_lon, s_lat, s_lon)
+    # 2. Calculate distance to the first corner (as a reference point)
+    # Since we deleted center_lat/lon, we use the first corner for the error message
+    dist = calculate_haversine(s_lat, s_lon, coords[0][0], coords[0][1])
     
-    print(f"DEBUG: Room {room_name} | Inside: {is_inside} | Distance to Center: {dist}m")
     return is_inside, round(float(dist), 2)
