@@ -249,7 +249,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     is_inside, dist = verify_location_in_polygon(lat, lon, timetable.classroom, db)
 
     # LOGIC: Success if INSIDE the 4 corners OR within 10 meters of center (GPS buffer)
-    if not (is_inside or dist <= 10.0):
+    if not (is_inside or dist <= 3.0):
         return {
             "status": "failed", 
             "message": f"Geofencing Error: You are {dist}m away from the classroom zone.",
