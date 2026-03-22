@@ -214,11 +214,10 @@
 
 
 
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
-# NOTE: We changed the function name here to match the new Polygon logic
+# NOTE: We maintain the polygon logic for dual-verification
 from app.services.location_service import verify_location_in_polygon
 from app.database import get_db
 from app.models.attendance import Attendance
@@ -232,31 +231,49 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     # 1. Extract data from request
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
+    student_bssid = data.get("bssid") # New: Received from React Frontend
     
     try:
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
     except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS coordinates received from device."}
+        return {"status": "failed", "message": "Invalid GPS coordinates received."}
 
-    # 2. Validate Timetable Entry
+    # 2. Validate Timetable and Room
     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
-        return {"status": "failed", "message": "Class session not found in database."}
+        return {"status": "failed", "message": "Class session not found."}
 
-    # 3. Polygon Geofencing Verification
-    # Returns: is_inside (Boolean), dist_to_center (Float)
+    # Access the classroom polygon model through the timetable relationship
+    room = timetable.classroom_polygon 
+    if not room:
+         return {"status": "failed", "message": "Classroom configuration missing."}
+
+    # 3. Dual-Verification Logic (Wi-Fi BSSID + GPS Polygon)
+    
+    # A. Wi-Fi Check (First line of defense for adjacent rooms)
+    # Note: We use .lower() to ensure case-insensitive matching for MAC addresses
+    if room.wifi_bssid and student_bssid:
+        if student_bssid.lower() != room.wifi_bssid.lower():
+             return {
+                "status": "failed", 
+                "message": "Wi-Fi Error: You are not connected to the correct classroom Access Point."
+            }
+    elif room.wifi_bssid and not student_bssid:
+        return {"status": "failed", "message": "Please enable Wi-Fi to mark attendance."}
+
+    # B. Polygon Geofencing Verification
     is_inside, dist = verify_location_in_polygon(lat, lon, timetable.classroom, db)
 
-    # LOGIC: Success if INSIDE the 4 corners OR within 10 meters of center (GPS buffer)
-    if not (is_inside or dist <= 6.0):
+    # SUCCESS if inside the thin polygon OR within a very tight 5m buffer
+    if not (is_inside or dist <= 5.0):
         return {
             "status": "failed", 
-            "message": f"Geofencing Error: You are {dist}m away from the classroom zone.",
+            "message": f"Geofencing Error: You are physically {dist}m outside the room.",
             "distance": dist 
         }
 
-    # 4. Prevent Duplicate Attendance (Same student, same class, same day)
+    # 4. Prevent Duplicate Attendance
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -288,7 +305,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         return {"status": "failed", "message": "Internal Server Error during saving."}
 
 @router.get("/student/{student_id}")
-def get_student_history(student_id: int, db: Session = Depends(get_db)):
+def get_student_history(student_id: str, db: Session = Depends(get_db)):
     history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
     return [
         {
@@ -300,7 +317,6 @@ def get_student_history(student_id: int, db: Session = Depends(get_db)):
 
 @router.get("/analytics/{teacher_id}")
 def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
-    # Find all classes belonging to this teacher
     class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
     class_id_list = [c[0] for c in class_ids]
 

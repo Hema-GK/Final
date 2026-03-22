@@ -100,21 +100,20 @@ def is_inside_polygon(x, y, poly):
         p1x, p1y = p2x, p2y
     return inside
 
-def verify_location_in_polygon(s_lat, s_lon, room_name, db: Session):
+def verify_location_with_wifi(s_lat, s_lon, s_bssid, room_name, db: Session):
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
-    if not room or not room.polygon:
-        return False, 0.0
+    if not room:
+        return False, "Room not found"
 
-    # Parse the polygon corners
-    coords = room.polygon
-    is_inside = is_inside_polygon(s_lat, s_lon, coords)
+    # 1. Check GPS Polygon
+    is_inside_gps = is_inside_polygon(s_lat, s_lon, room.polygon)
     
-    # 1. Check if inside the 4 corners
-    # is_inside = is_inside_polygon(s_lat, s_lon, coords)
-    
-    # 2. Calculate distance to the first corner (as a reference point)
-    # Since we deleted center_lat/lon, we use the first corner for the error message
-    dist = calculate_haversine(s_lat, s_lon, coords[0][0], coords[0][1])
-    print(f"DEBUG: Student at ({s_lat}, {s_lon}) checking against room {room_name}")
-    
-    return is_inside, round(float(dist), 2)
+    # 2. Check Wi-Fi BSSID (The Hotspot check)
+    is_on_correct_wifi = (s_bssid == room.wifi_bssid)
+
+    if is_inside_gps and is_on_correct_wifi:
+        return True, "Success"
+    elif not is_on_correct_wifi:
+        return False, "Please connect to the Classroom Wi-Fi"
+    else:
+        return False, "You are on Wi-Fi but physically outside the room"
