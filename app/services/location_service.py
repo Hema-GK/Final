@@ -115,5 +115,6 @@ def verify_location_in_polygon(s_lat, s_lon, room_name, db: Session):
     # 2. Calculate distance to the first corner (as a reference point)
     # Since we deleted center_lat/lon, we use the first corner for the error message
     dist = calculate_haversine(s_lat, s_lon, coords[0][0], coords[0][1])
+    print(f"DEBUG: Student at ({s_lat}, {s_lon}) checking against room {room_name}")
     
     return is_inside, round(float(dist), 2)
