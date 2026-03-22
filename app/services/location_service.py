@@ -106,10 +106,11 @@ def verify_location_in_polygon(s_lat, s_lon, room_name, db: Session):
         return False, 0.0
 
     # Parse the polygon corners
-    coords = json.loads(room.polygon)
+    coords = room.polygon
+    is_inside = is_inside_polygon(s_lat, s_lon, coords)
     
     # 1. Check if inside the 4 corners
-    is_inside = is_inside_polygon(s_lat, s_lon, coords)
+    # is_inside = is_inside_polygon(s_lat, s_lon, coords)
     
     # 2. Calculate distance to the first corner (as a reference point)
     # Since we deleted center_lat/lon, we use the first corner for the error message
