@@ -37,7 +37,7 @@ def check_radius_from_polygon_db(s_lat, s_lon, room_name, db: Session):
             
             # Find furthest corner + 5m buffer for the "Perfect Radius"
             max_dist = max([calculate_haversine(c_lat, c_lon, float(p[0]), float(p[1])) for p in coords])
-            rec_radius = max_dist + 7.0
+            rec_radius = max_dist + 6.0
             # UPDATE DATABASE PERMANENTLY
             room.center_lat = c_lat
             room.center_lon = c_lon
