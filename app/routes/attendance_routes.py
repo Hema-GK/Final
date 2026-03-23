@@ -228,52 +228,30 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
-    # 1. Extract data from request
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
-    student_bssid = data.get("bssid") # New: Received from React Frontend
+    student_bssid = data.get("bssid")
+    student_rssi = data.get("rssi", -100) # Default to weak if missing
     
     try:
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
-    except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS coordinates received."}
+    except:
+        return {"status": "failed", "message": "Invalid coordinates."}
 
-    # 2. Validate Timetable and Room
     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
-        return {"status": "failed", "message": "Class session not found."}
+        return {"status": "failed", "message": "Session not found."}
 
-    # Access the classroom polygon model through the timetable relationship
-    room = timetable.classroom_polygon 
-    if not room:
-         return {"status": "failed", "message": "Classroom configuration missing."}
+    # Dual-Verification (GPS + BSSID + RSSI)
+    is_verified, message = verify_location_in_polygon(
+        lat, lon, student_bssid, student_rssi, timetable.classroom, db
+    )
 
-    # 3. Dual-Verification Logic (Wi-Fi BSSID + GPS Polygon)
-    
-    # A. Wi-Fi Check (First line of defense for adjacent rooms)
-    # Note: We use .lower() to ensure case-insensitive matching for MAC addresses
-    if room.wifi_bssid and student_bssid:
-        if student_bssid.lower() != room.wifi_bssid.lower():
-             return {
-                "status": "failed", 
-                "message": "Wi-Fi Error: You are not connected to the correct classroom Access Point."
-            }
-    elif room.wifi_bssid and not student_bssid:
-        return {"status": "failed", "message": "Please enable Wi-Fi to mark attendance."}
+    if not is_verified:
+        return {"status": "failed", "message": message}
 
-    # B. Polygon Geofencing Verification
-    is_inside, dist = verify_location_in_polygon(lat, lon, timetable.classroom, db)
-
-    # SUCCESS if inside the thin polygon OR within a very tight 5m buffer
-    if not (is_inside or dist <= 5.0):
-        return {
-            "status": "failed", 
-            "message": f"Geofencing Error: You are physically {dist}m outside the room.",
-            "distance": dist 
-        }
-
-    # 4. Prevent Duplicate Attendance
+    # Prevent Duplicate
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -281,28 +259,19 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked for this class today."}
+        return {"status": "failed", "message": "Attendance already marked."}
 
-    # 5. Save Attendance Record
-    try:
-        new_record = Attendance(
-            student_id=student_id,
-            timetable_id=timetable_id,
-            status="Present",
-            timestamp=datetime.now()
-        )
-        db.add(new_record)
-        db.commit()
-        
-        return {
-            "status": "success", 
-            "message": "Attendance marked successfully! ✅",
-            "distance": dist
-        }
-    except Exception as e:
-        db.rollback()
-        print(f"Database Error: {e}")
-        return {"status": "failed", "message": "Internal Server Error during saving."}
+    # Save Record
+    new_record = Attendance(
+        student_id=student_id,
+        timetable_id=timetable_id,
+        status="Present",
+        timestamp=datetime.now()
+    )
+    db.add(new_record)
+    db.commit()
+    
+    return {"status": "success", "message": "Attendance marked successfully! ✅"}
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: str, db: Session = Depends(get_db)):

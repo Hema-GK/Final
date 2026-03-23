@@ -24,7 +24,7 @@ class ClassroomPolygon(Base):
     classroom = Column(String(50), unique=True, nullable=False)
     # Stores the coordinates: [[lat, lon], [lat, lon]...]
     polygon = Column(JSON, nullable=False) 
-    # Stores the unique MAC address of the room's router or your hotspot
+    # Stores the unique MAC address of the room's router
     wifi_bssid = Column(String(50), nullable=True) 
 
     def __repr__(self):

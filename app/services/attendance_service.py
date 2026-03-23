@@ -110,45 +110,35 @@
 
 from datetime import datetime
 from sqlalchemy.orm import Session
-import math
-
 from ..models.attendance import Attendance
 from ..models.timetable import Timetable
 from ..utils.time_utils import current_day
 from ..services.face_service import recognize_face
 from ..services.anti_spoof_service import detect_spoof
-from ..services.location_service import check_radius_from_polygon_db
+from ..services.location_service import verify_location_in_polygon
 
 def is_attendance_open(start_time):
     now = datetime.now()
-    # Support both %H:%M and %H:%M:%S formats
     try:
         class_start = datetime.strptime(start_time.split('.')[0], "%H:%M:%S")
     except:
         class_start = datetime.strptime(start_time, "%H:%M")
 
-    class_start = class_start.replace(
-        year=now.year,
-        month=now.month,
-        day=now.day
-    )
-
+    class_start = class_start.replace(year=now.year, month=now.month, day=now.day)
     diff = (now - class_start).total_seconds()
 
-    # Attendance allowed for 60 minutes (3600s) as per your setting
-    if 0 <= diff <= 3600:
-        return True
-    return False
+    # Allow attendance for 60 minutes
+    return 0 <= diff <= 3600
 
-def mark_attendance(image, latitude, longitude, db: Session):
+def mark_attendance_logic(image, latitude, longitude, bssid, rssi, db: Session):
     # 1. Spoof detection
     if detect_spoof(image):
-        return {"status": "Spoof detected"}
+        return {"status": "failed", "message": "Spoof detected"}
 
     # 2. Face recognition
     usn = recognize_face(image)
     if not usn:
-        return {"status": "Face not recognized"}
+        return {"status": "failed", "message": "Face not recognized"}
 
     day = current_day()
     now_time = datetime.now().time()
@@ -158,9 +148,8 @@ def mark_attendance(image, latitude, longitude, db: Session):
     current_class = None
 
     for cls in timetable:
-        # Clean timestamp strings to avoid parsing errors
-        clean_start = cls.start_time.split('.')[0]
-        clean_end = cls.end_time.split('.')[0]
+        clean_start = str(cls.start_time).split('.')[0]
+        clean_end = str(cls.end_time).split('.')[0]
         
         try:
             start = datetime.strptime(clean_start, "%H:%M:%S").time()
@@ -170,36 +159,22 @@ def mark_attendance(image, latitude, longitude, db: Session):
             end = datetime.strptime(clean_end, "%H:%M").time()
 
         if start <= now_time <= end:
-            if not is_attendance_open(cls.start_time):
-                return {"status": "Attendance window closed"}
-            current_class = cls
-            break
+            if is_attendance_open(str(cls.start_time)):
+                current_class = cls
+                break
 
     if not current_class:
-        return {"status": "No active class found for this time"}
+        return {"status": "failed", "message": "No active class found"}
 
-    # 4. CRITICAL: Location Validation (Re-enabled)
-    # Using a 25.0m default if radius isn't specified to account for indoor drift
-    # allowed_radius = float(current_class.radius) if current_class.radius else 25.
-    allowed_radius =  30.0
-
-    
-    is_in, distance = check_radius_from_polygon_db(
-        float(latitude),
-        float(longitude),
-        float(current_class.latitude),
-        float(current_class.longitude),
-        allowed_radius
+    # 4. Hardware & Location Validation (BSSID + RSSI + Polygon)
+    is_verified, loc_msg = verify_location_in_polygon(
+        float(latitude), float(longitude), bssid, rssi, current_class.classroom, db
     )
 
-    if not is_in:
-        # Returning distance as a float ensures frontend won't show "unknownm"
-        return {
-            "status": "Outside classroom",
-            "distance": round(distance, 2) 
-        }
+    if not is_verified:
+        return {"status": "failed", "message": loc_msg}
 
-    # 5. Prevent duplicate attendance
+    # 5. Prevent duplicate
     today_str = str(datetime.now().date())
     already_marked = db.query(Attendance).filter(
         Attendance.student_id == usn,
@@ -208,7 +183,7 @@ def mark_attendance(image, latitude, longitude, db: Session):
     ).first()
 
     if already_marked:
-        return {"status": "Attendance already marked for today"}
+        return {"status": "failed", "message": "Attendance already marked for today"}
 
     # 6. Save to Database
     attendance = Attendance(
@@ -223,4 +198,4 @@ def mark_attendance(image, latitude, longitude, db: Session):
     db.add(attendance)
     db.commit()
 
-    return {"status": "success", "message": "Attendance marked successfully"}
+    return {"status": "success", "message": "Attendance marked successfully! ✅"}
