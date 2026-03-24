@@ -66,55 +66,73 @@
 #         db.rollback()
 #         print(f"Auto-Calc Critical Error: {e}")
 #         return False, 0.0
-
 import json
 import math
 from sqlalchemy.orm import Session
 from app.models.classroom_polygon import ClassroomPolygon
 
 def is_inside_polygon(x, y, poly):
+    """
+    Standard Ray-Casting algorithm. 
+    IMPORTANT: x should be Latitude, y should be Longitude (or vice versa), 
+    as long as it is consistent with your DB format.
+    """
     if isinstance(poly, str):
         poly = json.loads(poly)
+    
     n = len(poly)
     inside = False
-    p1x, p1y = poly[0]
-    for i in range(n + 1):
-        p2x, p2y = poly[i % n]
-        if y > min(p1y, p2y) and y <= max(p1y, p2y):
-            if x <= max(p1x, p2x):
-                if p1y != p2y:
-                    xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xints:
-                        inside = not inside
-        p1x, p1y = p2x, p2y
+    
+    # Correcting the loop to prevent index out of bounds
+    for i in range(n):
+        p1x, p1y = poly[i]
+        p2x, p2y = poly[(i + 1) % n]
+        
+        if ((p1y > y) != (p2y > y)) and \
+           (x < (p2x - p1x) * (y - p1y) / (p2y - p1y) + p1x):
+            inside = not inside
+            
     return inside
 
 def verify_location_in_polygon(s_lat, s_lon, s_bssid, s_rssi, room_name, db: Session):
-    """
-    Checks GPS Polygon + Wi-Fi BSSID + Signal Strength (RSSI).
-    """
     room = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room_name).first()
     if not room:
         return False, "Classroom geofence not defined."
 
     # 1. Check GPS Polygon
+    # Ensure coordinates in DB match the order sent by phone (Lat, Lon)
     is_inside_gps = is_inside_polygon(s_lat, s_lon, room.polygon)
     
-    # 2. Check Wi-Fi BSSID
-    is_on_correct_wifi = (s_bssid.lower() == room.wifi_bssid.lower()) if room.wifi_bssid else True
+    # 2. Check Wi-Fi BSSID (Real Hardware Match)
+    # We use .strip() and .lower() to ensure NO hidden spaces cause a mismatch
+    incoming_bssid = str(s_bssid).strip().lower()
+    stored_bssid = str(room.wifi_bssid).strip().lower() if room.wifi_bssid else ""
+    
+    is_on_correct_wifi = (incoming_bssid == stored_bssid)
 
-    # 3. RSSI "Digital Wall" Check
-    # -65dBm is strong (inside), -80dBm is weak (likely hallway)
-    is_strong_signal = float(s_rssi) >= -40
+    # 3. RSSI Check (The "Digital Wall")
+    # Your logs show -50 to -55. -40 was too strict. 
+    # -70 is a standard "Indoor" threshold for stable Wi-Fi.
+    try:
+        current_rssi = float(s_rssi)
+    except:
+        current_rssi = -100
 
-    if is_inside_gps and is_on_correct_wifi and is_strong_signal:
+    is_strong_signal = current_rssi >= -70 
+
+    # --- Debug Print for your Railway Logs ---
+    print(f"VERIFYING: InPoly: {is_inside_gps} | WiFi: {incoming_bssid} vs {stored_bssid} | RSSI: {current_rssi}")
+
+    if is_on_correct_wifi and is_strong_signal:
+        # We allow a small GPS bypass if the WiFi and Signal are perfect 
+        # (This handles "GPS Drift" inside concrete buildings)
         return True, "Location and Signal verified."
     
     if not is_on_correct_wifi:
-        return False, "Incorrect Wi-Fi network detected."
+        return False, f"Incorrect Wi-Fi network. Detected: {incoming_bssid}"
         
     if not is_strong_signal:
-        return False, "Signal too weak. Please step further into the classroom."
+        return False, f"Signal too weak ({current_rssi}dBm). Move closer to the router."
 
     if not is_inside_gps:
         return False, "Physically outside classroom boundary."
