@@ -99,42 +99,30 @@ def verify_location_in_polygon(s_lat, s_lon, s_bssid, s_rssi, room_name, db: Ses
     if not room:
         return False, "Classroom geofence not defined."
 
-    # 1. Check GPS Polygon
-    # Ensure coordinates in DB match the order sent by phone (Lat, Lon)
+    # 1. STRICT GPS CHECK
     is_inside_gps = is_inside_polygon(s_lat, s_lon, room.polygon)
     
-    # 2. Check Wi-Fi BSSID (Real Hardware Match)
-    # We use .strip() and .lower() to ensure NO hidden spaces cause a mismatch
-    incoming_bssid = str(s_bssid).strip().lower()
-    stored_bssid = str(room.wifi_bssid).strip().lower() if room.wifi_bssid else ""
+    # 2. STRICT BSSID CHECK (No placeholders allowed)
+    incoming_bssid = str(s_bssid).lower().strip()
+    required_bssid = str(room.wifi_bssid).lower().strip()
     
-    is_on_correct_wifi = (incoming_bssid == stored_bssid)
+    is_on_correct_wifi = (incoming_bssid == required_bssid)
 
-    # 3. RSSI Check (The "Digital Wall")
-    # Your logs show -50 to -55. -40 was too strict. 
-    # -70 is a standard "Indoor" threshold for stable Wi-Fi.
-    try:
-        current_rssi = float(s_rssi)
-    except:
-        current_rssi = -100
+    # 3. RSSI CHECK
+    is_strong_signal = float(s_rssi) >= -70
 
-    is_strong_signal = current_rssi >= -70 
-
-    # --- Debug Print for your Railway Logs ---
-    print(f"VERIFYING: InPoly: {is_inside_gps} | WiFi: {incoming_bssid} vs {stored_bssid} | RSSI: {current_rssi}")
-
-    if is_on_correct_wifi and is_strong_signal:
-        # We allow a small GPS bypass if the WiFi and Signal are perfect 
-        # (This handles "GPS Drift" inside concrete buildings)
-        return True, "Location and Signal verified."
+    # BOTH MUST BE TRUE
+    if is_inside_gps and is_on_correct_wifi and is_strong_signal:
+        return True, "Location and Hardware verified."
     
+    # Specific error reporting for debugging
     if not is_on_correct_wifi:
-        return False, f"Incorrect Wi-Fi network. Detected: {incoming_bssid}"
+        return False, f"Incorrect Wi-Fi. Expected {required_bssid}, detected {incoming_bssid}"
+    
+    if not is_inside_gps:
+        return False, f"Outside classroom boundary. Current: ({s_lat}, {s_lon})"
         
     if not is_strong_signal:
-        return False, f"Signal too weak ({current_rssi}dBm). Move closer to the router."
-
-    if not is_inside_gps:
-        return False, "Physically outside classroom boundary."
+        return False, "Signal too weak. Please step further into the classroom."
 
     return False, "Verification failed."
