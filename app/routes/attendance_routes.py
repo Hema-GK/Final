@@ -233,6 +233,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     student_bssid = data.get("bssid")
     student_rssi = data.get("rssi", -100) # Default to weak if missing
     print(f"DEBUG: Received Attendance Request. BSSID: {data.get('bssid')}")
+    print(f"DEBUG: Received Attendance Request. BSSID: {student_bssid}")
     
     try:
         lat = float(data.get("latitude"))
