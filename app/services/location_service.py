@@ -37,7 +37,7 @@ def verify_location_in_polygon(s_lat, s_lon, s_bssid, s_rssi, room_name, db: Ses
     is_on_correct_wifi = (incoming_bssid == required_bssid)
 
     # 3. RSSI CHECK - Relaxed to -80 for better indoor stability during demo
-    is_strong_signal = float(s_rssi) >= -66
+    is_strong_signal = float(s_rssi) >= -60
 
     # --- DUAL-VERIFICATION LOGIC ---
     # If Wi-Fi is 100% correct and strong, we override minor GPS drift.
