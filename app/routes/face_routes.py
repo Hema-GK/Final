@@ -90,15 +90,10 @@ import json
 
 router = APIRouter(prefix="/face", tags=["Face Recognition"])
 
-
 @router.post("/recognize")
 def recognize_face(data: dict, db: Session = Depends(get_db)):
 
     try:
-
-        # -----------------------------
-        # Decode captured image
-        # -----------------------------
         image_data = data["image"].split(",")[1]
         image_bytes = base64.b64decode(image_data)
 
@@ -107,61 +102,46 @@ def recognize_face(data: dict, db: Session = Depends(get_db)):
 
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # -----------------------------
-        # LIVENESS CHECK
-        # -----------------------------
-        live = detect_liveness(img)
-
-        if not live:
+        # -------------------------
+        # 🔒 LIVENESS CHECK
+        # -------------------------
+        if not detect_liveness(img):
             return {"status": "Fake face detected"}
 
-        # -----------------------------
-        # FACE DETECTION
-        # -----------------------------
         face_locations = face_recognition.face_locations(rgb)
 
+        # 🔒 Anti cheating: multiple faces
         if len(face_locations) != 1:
-            return {"status": "Please show exactly one face"}
+            return {"status": "Multiple faces detected"}
 
         encodings = face_recognition.face_encodings(rgb, face_locations)
 
-        if len(encodings) == 0:
-            return {"status": "No face detected"}
+        if not encodings:
+            return {"status": "No face"}
 
-        captured_encoding = encodings[0]
+        captured = encodings[0]
 
-        # -----------------------------
-        # COMPARE WITH DATABASE
-        # -----------------------------
         students = db.query(Student).all()
 
         best_match = None
         best_distance = 1.0
 
         for student in students:
-
             if not student.face_encoding:
                 continue
 
-            stored_encoding = np.array(json.loads(student.face_encoding))
+            stored = np.array(json.loads(student.face_encoding))
 
-            distance = face_recognition.face_distance(
-                [stored_encoding], captured_encoding
-            )[0]
+            dist = face_recognition.face_distance([stored], captured)[0]
 
-            print("Checking:", student.name, "Distance:", distance)
-
-            if distance < best_distance:
-                best_distance = distance
+            if dist < best_distance:
+                best_distance = dist
                 best_match = student
 
-        # -----------------------------
-        # MATCH THRESHOLD
-        # -----------------------------
-        if best_match and best_distance < 0.50:
-
+        # 🔒 Strict threshold
+        if best_match and best_distance < 0.45:
             return {
-                "status": "Face recognized",
+                "status": "success",
                 "student": {
                     "id": best_match.id,
                     "name": best_match.name,
@@ -173,7 +153,4 @@ def recognize_face(data: dict, db: Session = Depends(get_db)):
         return {"status": "Face not recognized"}
 
     except Exception as e:
-
-        print("FACE ERROR:", e)
-
-        return {"status": "Recognition error"}
+        return {"status": "error", "message": str(e)}

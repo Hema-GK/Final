@@ -11,35 +11,32 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
+
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
-    student_bssid = data.get("bssid")
-    # Defaulting to -100 (weak) if RSSI is missing from the frontend
-    student_rssi = data.get("rssi", -100) 
-    
-    # 1. Parse Coordinates
-    try:
-        lat = float(data.get("latitude"))
-        lon = float(data.get("longitude"))
-    except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS coordinates."}
 
-    # 2. Fetch Session Details
-    timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    ssid = data.get("ssid")
+    rssi = data.get("rssi", -100)
+
+    lat = float(data.get("latitude"))
+    lon = float(data.get("longitude"))
+
+    timetable = db.query(Timetable).filter(
+        Timetable.id == timetable_id
+    ).first()
+
     if not timetable:
-        return {"status": "failed", "message": "Class session not found."}
+        return {"status": "failed", "message": "Class not found"}
 
-    # 3. Perform Dual-Verification (GPS + Wi-Fi)
-    # This now uses the 'High-Confidence Override' logic in location_service.py
-    is_verified, message = verify_location_in_polygon(
-        lat, lon, student_bssid, student_rssi, timetable.classroom, db
+    # ✅ LOCATION CHECK
+    verified, msg = verify_location_in_polygon(
+        lat, lon, ssid, rssi, timetable.classroom, db
     )
 
-    if not is_verified:
-        print(f"DEBUG: Verification Failed for Student {student_id}: {message}")
-        return {"status": "failed", "message": message}
+    if not verified:
+        return {"status": "failed", "message": msg}
 
-    # 4. Prevent Duplicate Attendance for the same day
+    # ✅ DUPLICATE CHECK
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -47,24 +44,19 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked for today."}
+        return {"status": "failed", "message": "Already marked"}
 
-    # 5. Save the Attendance Record
     new_record = Attendance(
         student_id=student_id,
         timetable_id=timetable_id,
         status="Present",
         timestamp=datetime.now()
     )
-    
-    try:
-        db.add(new_record)
-        db.commit()
-        print(f"DEBUG: Success! Attendance marked for {student_id} in {timetable.classroom}")
-        return {"status": "success", "message": "Attendance marked successfully! ✅"}
-    except Exception as e:
-        db.rollback()
-        return {"status": "failed", "message": f"Database error: {str(e)}"}
+
+    db.add(new_record)
+    db.commit()
+
+    return {"status": "success", "message": "Attendance marked ✅"}
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: str, db: Session = Depends(get_db)):
