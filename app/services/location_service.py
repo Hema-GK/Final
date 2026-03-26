@@ -28,28 +28,31 @@ def is_inside_polygon(lat, lon, polygon):
     return inside
 
 
+from app.models.classroom_polygon import ClassroomPolygon
+
 def verify_location(lat, lon, classroom, db):
 
-    classroom_data = db.execute(
-        f"SELECT polygon FROM classroom_polygons WHERE classroom = '{classroom}'"
-    ).fetchone()
+    # ✅ FIXED: use ORM instead of raw SQL
+    room = db.query(ClassroomPolygon).filter(
+        ClassroomPolygon.classroom == classroom
+    ).first()
 
-    if not classroom_data:
+    if not room:
         return False, "Polygon not found"
 
-    polygon = classroom_data[0]
+    polygon = room.polygon
 
-    # ✅ inside check
+    # ✅ inside polygon check
     if not is_inside_polygon(lat, lon, polygon):
         return False, "Outside classroom"
 
-    # ✅ center check (ANTI DOOR CHEATING)
+    # ✅ center check (anti-door cheating)
     center_lat = sum(p[0] for p in polygon) / len(polygon)
     center_lon = sum(p[1] for p in polygon) / len(polygon)
 
     distance = calculate_distance(lat, lon, center_lat, center_lon)
 
-    if distance > 50:
+    if distance > 50:   # 🔥 keep bigger for now
         return False, "Move inside classroom"
 
-    return True, "Verified"
+    return True, "Location verified"
