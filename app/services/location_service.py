@@ -41,8 +41,7 @@ def verify_location(lat, lon, classroom, db):
 
     polygon = room.polygon
 
-    # 🔥 ONLY boundary check (NO distance)
     if not is_inside_polygon(lat, lon, polygon):
-        return False, "❌ You are outside classroom"
+        return False, "📍 Move slightly inside classroom and try again"
 
-    return True, "✅ Inside classroom"
+    return True, "Location verified"
