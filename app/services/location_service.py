@@ -1,18 +1,7 @@
 import json
+import math
 from sqlalchemy.orm import Session
 from app.models.classroom_polygon import ClassroomPolygon
-import math
-
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371000  # meters
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 def is_inside_polygon(x, y, poly):
@@ -33,7 +22,11 @@ def is_inside_polygon(x, y, poly):
     return inside
 
 
-def verify_location_in_polygon(lat, lon, ssid, rssi, room_name, db: Session):
+# 🔥 Distance function (for edge cases)
+def distance(lat1, lon1, lat2, lon2):
+    return math.sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2) * 111000  # meters
+
+def verify_location_and_beacon(lat, lon, beacon_uuid, rssi, room_name, db):
 
     room = db.query(ClassroomPolygon).filter(
         ClassroomPolygon.classroom == room_name
@@ -42,40 +35,18 @@ def verify_location_in_polygon(lat, lon, ssid, rssi, room_name, db: Session):
     if not room:
         return False, "Classroom not configured"
 
-    polygon = room.polygon
+    # 📍 GPS
+    inside = is_inside_polygon(lat, lon, room.polygon)
 
-    # -------------------------
-    # GPS CHECK (PRIMARY)
-    # -------------------------
-    inside = is_inside_polygon(lat, lon, polygon)
+    if not inside:
+        return False, "Outside classroom"
 
-    # -------------------------
-    # DISTANCE CHECK (NEW 🔥)
-    # Helps near-door accuracy
-    # -------------------------
-    center_lat, center_lon = json.loads(polygon)[0]
+    # 📡 UUID match
+    if beacon_uuid != room.beacon_uuid:
+        return False, "Wrong classroom beacon"
 
-    distance = haversine_distance(lat, lon, center_lat, center_lon)
+    # 🔥 RSSI check
+    if rssi is None or rssi < -70:
+        return False, "Too far from classroom (weak signal)"
 
-    near_room = distance < 40  # meters tolerance
-
-    # -------------------------
-    # SSID CHECK (OPTIONAL)
-    # -------------------------
-    expected_ssid = "College_Wifi_Test"
-
-    ssid_ok = (ssid == expected_ssid)
-
-    # -------------------------
-    # SIGNAL CHECK
-    # -------------------------
-    signal_ok = float(rssi) >= -70
-
-    # -------------------------
-    # FINAL DECISION
-    # -------------------------
-    if inside or near_room:
-        if signal_ok:
-            return True, "Location verified"
-
-    return False, f"Outside classroom (distance: {int(distance)}m)"
+    return True, "Verified"

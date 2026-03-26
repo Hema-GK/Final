@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, date
-from app.services.location_service import verify_location_in_polygon
+from sqlalchemy import func
+
 from app.database import get_db
 from app.models.attendance import Attendance
 from app.models.timetable import Timetable
-from sqlalchemy import func
+from app.services.location_service import verify_location_and_beacon
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
@@ -15,12 +17,17 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
 
-    ssid = data.get("ssid")
+    beacon_uuid = data.get("beacon_uuid")
     rssi = data.get("rssi", -100)
 
-    lat = float(data.get("latitude"))
-    lon = float(data.get("longitude"))
+    # 📍 Parse GPS
+    try:
+        lat = float(data.get("latitude"))
+        lon = float(data.get("longitude"))
+    except:
+        return {"status": "failed", "message": "Invalid GPS coordinates"}
 
+    # 📚 Get class
     timetable = db.query(Timetable).filter(
         Timetable.id == timetable_id
     ).first()
@@ -28,15 +35,15 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     if not timetable:
         return {"status": "failed", "message": "Class not found"}
 
-    # ✅ LOCATION CHECK
-    verified, msg = verify_location_in_polygon(
-        lat, lon, ssid, rssi, timetable.classroom, db
+    # 🔐 VERIFY (GPS + BEACON + RSSI)
+    verified, msg = verify_location_and_beacon(
+        lat, lon, beacon_uuid, rssi, timetable.classroom, db
     )
 
     if not verified:
         return {"status": "failed", "message": msg}
 
-    # ✅ DUPLICATE CHECK
+    # 🔁 Prevent duplicate attendance (same day)
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -44,8 +51,9 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Already marked"}
+        return {"status": "failed", "message": "Attendance already marked"}
 
+    # ✅ Save attendance
     new_record = Attendance(
         student_id=student_id,
         timetable_id=timetable_id,
@@ -53,25 +61,45 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         timestamp=datetime.now()
     )
 
-    db.add(new_record)
-    db.commit()
+    try:
+        db.add(new_record)
+        db.commit()
 
-    return {"status": "success", "message": "Attendance marked ✅"}
+        return {
+            "status": "success",
+            "message": "Attendance marked successfully ✅"
+        }
 
+    except Exception as e:
+        db.rollback()
+        return {"status": "failed", "message": str(e)}
+
+
+# 📊 Student history
 @router.get("/student/{student_id}")
 def get_student_history(student_id: str, db: Session = Depends(get_db)):
-    history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+    history = db.query(Attendance).filter(
+        Attendance.student_id == student_id
+    ).all()
+
     return [
         {
-            "subject": a.timetable.subject if a.timetable else "Unknown", 
-            "date": a.timestamp.strftime("%Y-%m-%d"), 
+            "subject": a.timetable.subject if a.timetable else "Unknown",
+            "date": a.timestamp.strftime("%Y-%m-%d"),
             "status": a.status
-        } for a in history
+        }
+        for a in history
     ]
 
+
+# 📈 Teacher analytics
 @router.get("/analytics/{teacher_id}")
 def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
-    class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
+
+    class_ids = db.query(Timetable.id).filter(
+        Timetable.teacher_id == teacher_id
+    ).all()
+
     class_id_list = [c[0] for c in class_ids]
 
     if not class_id_list:
@@ -79,15 +107,23 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
 
     results = db.query(
         Attendance.student_id,
-        func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
-        func.count(Attendance.id).filter(Attendance.status == "Absent").label("absent")
-    ).filter(Attendance.timetable_id.in_(class_id_list))\
-     .group_by(Attendance.student_id).all()
+        func.count(Attendance.id).filter(
+            Attendance.status == "Present"
+        ).label("present"),
+        func.count(Attendance.id).filter(
+            Attendance.status == "Absent"
+        ).label("absent")
+    ).filter(
+        Attendance.timetable_id.in_(class_id_list)
+    ).group_by(
+        Attendance.student_id
+    ).all()
 
     return [
         {
-            "student_id": row.student_id, 
-            "present": row.present, 
+            "student_id": row.student_id,
+            "present": row.present,
             "absent": row.absent
-        } for row in results
+        }
+        for row in results
     ]
