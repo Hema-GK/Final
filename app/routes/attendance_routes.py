@@ -86,4 +86,7 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
         Attendance.timetable_id.in_(class_id_list)
     ).group_by(Attendance.student_id).all()
 
-    
+    return [
+        {"student_id": row.student_id, "present": row.present, "absent": row.absent}
+        for row in results
+    ]
