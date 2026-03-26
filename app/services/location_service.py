@@ -1,38 +1,37 @@
-from math import radians, cos, sin, sqrt, atan2
-
-def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371000
-    d_lat = radians(lat2 - lat1)
-    d_lon = radians(lon2 - lon1)
-
-    a = sin(d_lat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1-a))
-
-    return R * c
+import math
+from app.models.classroom_polygon import ClassroomPolygon
 
 
+# 🔥 Point in Polygon (Ray Casting)
 def is_inside_polygon(lat, lon, polygon):
+    x = lat
+    y = lon
+
     inside = False
-    j = len(polygon) - 1
+    n = len(polygon)
 
-    for i in range(len(polygon)):
-        xi, yi = polygon[i]
-        xj, yj = polygon[j]
+    p1x, p1y = polygon[0]
 
-        if ((yi > lon) != (yj > lon)) and \
-                (lat < (xj - xi) * (lon - yi) / (yj - yi + 1e-9) + xi):
-            inside = not inside
+    for i in range(n + 1):
+        p2x, p2y = polygon[i % n]
 
-        j = i
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+
+        p1x, p1y = p2x, p2y
 
     return inside
 
 
-from app.models.classroom_polygon import ClassroomPolygon
-
+# 🔥 Main Verification (STRICT MODE)
 def verify_location(lat, lon, classroom, db):
 
-    # ✅ FIXED: use ORM instead of raw SQL
     room = db.query(ClassroomPolygon).filter(
         ClassroomPolygon.classroom == classroom
     ).first()
@@ -42,17 +41,8 @@ def verify_location(lat, lon, classroom, db):
 
     polygon = room.polygon
 
-    # ✅ inside polygon check
+    # 🔥 ONLY boundary check (NO distance)
     if not is_inside_polygon(lat, lon, polygon):
-        return False, "Outside classroom"
+        return False, "❌ You are outside classroom"
 
-    # ✅ center check (anti-door cheating)
-    center_lat = sum(p[0] for p in polygon) / len(polygon)
-    center_lon = sum(p[1] for p in polygon) / len(polygon)
-
-    distance = calculate_distance(lat, lon, center_lat, center_lon)
-
-    if distance > 200:   # 🔥 keep bigger for now
-        return False, "Move inside classroom"
-
-    return True, "Location verified"
+    return True, "✅ Inside classroom"
