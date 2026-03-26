@@ -26,7 +26,7 @@ def is_inside_polygon(x, y, poly):
 def distance(lat1, lon1, lat2, lon2):
     return math.sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2) * 111000  # meters
 
-def verify_location_and_beacon(lat, lon, beacon_uuid, rssi, room_name, db):
+def verify_location_and_beacon(lat, lon, rssi, room_name, db):
 
     room = db.query(ClassroomPolygon).filter(
         ClassroomPolygon.classroom == room_name
@@ -35,18 +35,14 @@ def verify_location_and_beacon(lat, lon, beacon_uuid, rssi, room_name, db):
     if not room:
         return False, "Classroom not configured"
 
-    # 📍 GPS
+    # 📍 GPS check
     inside = is_inside_polygon(lat, lon, room.polygon)
 
     if not inside:
         return False, "Outside classroom"
 
-    # 📡 UUID match
-    if beacon_uuid != room.beacon_uuid:
-        return False, "Wrong classroom beacon"
-
-    # 🔥 RSSI check
-    if rssi is None or rssi < -70:
-        return False, "Too far from classroom (weak signal)"
+    # 📡 RSSI check
+    if rssi < -70:
+        return False, "Weak signal (not inside classroom)"
 
     return True, "Verified"

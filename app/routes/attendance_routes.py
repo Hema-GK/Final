@@ -10,24 +10,21 @@ from app.services.location_service import verify_location_and_beacon
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
-
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
 
     student_id = data.get("student_id")
     timetable_id = data.get("timetable_id")
 
-    beacon_uuid = data.get("beacon_uuid")
     rssi = data.get("rssi", -100)
 
-    # 📍 Parse GPS
+    # 📍 GPS
     try:
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
     except:
-        return {"status": "failed", "message": "Invalid GPS coordinates"}
+        return {"status": "failed", "message": "Invalid GPS"}
 
-    # 📚 Get class
     timetable = db.query(Timetable).filter(
         Timetable.id == timetable_id
     ).first()
@@ -35,15 +32,15 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     if not timetable:
         return {"status": "failed", "message": "Class not found"}
 
-    # 🔐 VERIFY (GPS + BEACON + RSSI)
+    # 🔥 NEW LOGIC (NO UUID)
     verified, msg = verify_location_and_beacon(
-        lat, lon, beacon_uuid, rssi, timetable.classroom, db
+        lat, lon, rssi, timetable.classroom, db
     )
 
     if not verified:
         return {"status": "failed", "message": msg}
 
-    # 🔁 Prevent duplicate attendance (same day)
+    # duplicate check
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -51,9 +48,8 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked"}
+        return {"status": "failed", "message": "Already marked"}
 
-    # ✅ Save attendance
     new_record = Attendance(
         student_id=student_id,
         timetable_id=timetable_id,
@@ -61,18 +57,10 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         timestamp=datetime.now()
     )
 
-    try:
-        db.add(new_record)
-        db.commit()
+    db.add(new_record)
+    db.commit()
 
-        return {
-            "status": "success",
-            "message": "Attendance marked successfully ✅"
-        }
-
-    except Exception as e:
-        db.rollback()
-        return {"status": "failed", "message": str(e)}
+    return {"status": "success", "message": "Attendance marked ✅"}
 
 
 # 📊 Student history
