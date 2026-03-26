@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 
 # This now matches the function name in your location_service.py
-from app.services.location_service import verify_location_and_beacon
+from app.services.location_service import verify_location
 
 # Import all routes
 from app.routes import (
