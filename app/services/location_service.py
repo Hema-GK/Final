@@ -49,7 +49,7 @@ def verify_location(lat, lon, classroom, db):
 
     distance = calculate_distance(lat, lon, center_lat, center_lon)
 
-    if distance > 20:
+    if distance > 50:
         return False, "Move inside classroom"
 
     return True, "Verified"
