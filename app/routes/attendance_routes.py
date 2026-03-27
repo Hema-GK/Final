@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from sqlalchemy import func
@@ -19,20 +19,22 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
         lat = float(data.get("latitude"))
         lon = float(data.get("longitude"))
     except (TypeError, ValueError):
-        return {"status": "failed", "message": "Invalid GPS format"}
+        return {"status": "failed", "message": "Invalid GPS data"}
 
-    timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    timetable = db.query(Timetable).filter(
+        Timetable.id == timetable_id
+    ).first()
 
     if not timetable:
-        return {"status": "failed", "message": "Class session not found"}
+        return {"status": "failed", "message": "Class not found"}
 
-    # ✅ Improved Location Verification with Edge Buffer
+    # ✅ Shapely-powered Location Check
     verified, msg = verify_location(lat, lon, timetable.classroom, db)
 
     if not verified:
         return {"status": "failed", "message": msg}
 
-    # Check for existing record today to prevent duplicates
+    # Duplicate check for the same day
     existing = db.query(Attendance).filter(
         Attendance.student_id == student_id,
         Attendance.timetable_id == timetable_id,
@@ -40,7 +42,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        return {"status": "failed", "message": "Attendance already marked for this class today"}
+        return {"status": "failed", "message": "Already marked"}
 
     new_record = Attendance(
         student_id=student_id,
@@ -50,17 +52,16 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     )
 
     db.add(new_record)
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        return {"status": "failed", "message": "Database error occurred"}
+    db.commit()
 
     return {"status": "success", "message": "Attendance marked successfully ✅"}
 
 @router.get("/student/{student_id}")
 def get_student_history(student_id: str, db: Session = Depends(get_db)):
-    history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+    history = db.query(Attendance).filter(
+        Attendance.student_id == student_id
+    ).all()
+
     return [
         {
             "subject": a.timetable.subject if a.timetable else "Unknown",
@@ -72,7 +73,9 @@ def get_student_history(student_id: str, db: Session = Depends(get_db)):
 
 @router.get("/analytics/{teacher_id}")
 def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
-    class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
+    class_ids = db.query(Timetable.id).filter(
+        Timetable.teacher_id == teacher_id
+    ).all()
     class_id_list = [c[0] for c in class_ids]
 
     if not class_id_list:
@@ -87,6 +90,10 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
     ).group_by(Attendance.student_id).all()
 
     return [
-        {"student_id": row.student_id, "present": row.present, "absent": row.absent}
+        {
+            "student_id": row.student_id,
+            "present": row.present,
+            "absent": row.absent
+        }
         for row in results
     ]
