@@ -20,7 +20,7 @@ def verify_location(lat, lon, classroom, db):
     # ✅ INCREASED BUFFER
     # 0.0001 degrees is roughly 10 meters. 
     # This ensures that even with indoor GPS interference, you are verified.
-    attendance_zone = classroom_poly.buffer(0.0001)
+    attendance_zone = classroom_poly.buffer(0.0002)
     
     if attendance_zone.contains(student_point):
         return True, "Location verified"
