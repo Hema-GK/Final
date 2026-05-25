@@ -118,7 +118,6 @@
 
 #     return records
 
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -128,15 +127,13 @@ from app.models.teacher import Teacher
 from app.models.timetable import Timetable
 from app.models.attendance import Attendance
 from app.schemas.teacher_schema import TeacherRegister
-from app.security import hash_password  # Ensure this matches your function name in security.py
+# IMPORTED BOTH: Need hash_password for registration and verify_password for login
+from app.security import hash_password, verify_password 
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
 
 # REGISTER
-# REGISTER
-
-
 @router.post("/register")
 def register_teacher(data: dict, db: Session = Depends(get_db)):
 
@@ -147,7 +144,6 @@ def register_teacher(data: dict, db: Session = Depends(get_db)):
     if existing:
         return {"status": "Teacher already registered"}
 
-    # Secure the password using your security utility before saving
     hashed_pwd = hash_password(data["password"])
 
     teacher = Teacher(
@@ -177,7 +173,8 @@ def teacher_login(data: dict, db: Session = Depends(get_db)):
     if not teacher:
         return {"status": "Teacher not found"}
 
-    if teacher.password != data["password"]:
+    # FIXED: Uses your security script to compare the typed password against the hashed string safely
+    if not verify_password(data["password"], teacher.password):
         return {"status": "Wrong password"}
 
     return {
@@ -186,9 +183,8 @@ def teacher_login(data: dict, db: Session = Depends(get_db)):
         "teacher_name": teacher.name
     }
 
-# TODAY CLASSES
-from datetime import datetime
 
+# TODAY CLASSES
 @router.get("/today-classes/{teacher_id}")
 def today_classes(teacher_id: int, db: Session = Depends(get_db)):
 
@@ -202,27 +198,22 @@ def today_classes(teacher_id: int, db: Session = Depends(get_db)):
     return classes
 
 
-# UPDATE LOCATION
-# UPDATE CLASSROOM NAME & COORDINATES
+# UPDATE LOCATION / CLASSROOM NAME & COORDINATES
 @router.post("/update-classroom")
 def update_classroom(data: dict, db: Session = Depends(get_db)):
     timetable_id = data.get("timetable_id")
     new_room_name = data.get("classroom_name")
 
-    # 1. Find the timetable entry
     timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not timetable:
         raise HTTPException(status_code=404, detail="Timetable entry not found")
 
-    # 2. Find the classroom in your database to get its predefined polygons/coords
-    # Assuming you have a model named 'Classroom'
-    from app.models.classroom import Classroom # Adjust import based on your project
+    from app.models.classroom import Classroom 
     target_room = db.query(Classroom).filter(Classroom.name.ilike(new_room_name)).first()
 
     if not target_room:
         return {"status": "failed", "message": f"Room '{new_room_name}' not found in database"}
 
-    # 3. Update the timetable with the new room name and its stored coordinates
     timetable.classroom = target_room.name
     timetable.temp_latitude = target_room.latitude
     timetable.temp_longitude = target_room.longitude
