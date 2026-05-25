@@ -31,8 +31,9 @@ async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(g
         
         for row_number, raw_row in enumerate(reader, start=1):
             row = {k: v.strip() for k, v in raw_row.items()}
-            start_time = datetime.strptime(row['start_time'], "%H:%M").time()
-            end_time = datetime.strptime(row['end_time'], "%H:%M").time()
+            # The '%S' tells Python to expect seconds (e.g., :00)
+            start_time = datetime.strptime(row['start_time'], "%H:%M:%S").time()
+            end_time = datetime.strptime(row['end_time'], "%H:%M:%S").time()
 
             new_entry = Timetable(
                 semester=row['semester'],
