@@ -97,87 +97,87 @@ from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
-# @router.post("/register")
-# def register_student(data: dict, db: Session = Depends(get_db)):
-#     usn_clean = str(data.get("usn", "")).strip().upper()
-    
-#     # 1. Verification Check: Check if Admin pre-uploaded this USN
-#     allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
-#     if not allowed:
-#         return {"status": "failed", "message": "Your USN is not authorized by Admin. Registration blocked."}
-    
-#     # 2. Duplicate Check
-#     existing = db.query(Student).filter(Student.usn == usn_clean).first()
-#     if existing:
-#         return {"status": "failed", "message": "USN already registered"}
-
-#     try:
-#         # 3. Handle Biometric Face Processing
-#         image_data = data["image"].split(",")[1]
-#         image_bytes = base64.b64decode(image_data)
-#         img = face_recognition.load_image_file(io.BytesIO(image_bytes))
-        
-#         encodings = face_recognition.face_encodings(img)
-#         if len(encodings) == 0:
-#             return {"status": "failed", "message": "Face not clear"}
-        
-#         face_encoding_str = json.dumps(encodings[0].tolist())
-#         hashed_pwd = hash_password(str(data.get("password", "")).strip())
-
-#         # 4. Save detailed metrics
-#         new_student = Student(
-#             name=data.get("name"),
-#             usn=usn_clean,
-#             year=int(data.get("year")),
-#             semester=int(data.get("semester")),
-#             section=data.get("section"),
-#             password=hashed_pwd,
-#             face_encoding=face_encoding_str
-#         )
-
-#         db.add(new_student)
-#         db.commit()
-#         db.refresh(new_student) 
-        
-#         return {"status": "success", "message": "Registered successfully"}
-
-#     except Exception as e:
-#         db.rollback()
-#         print(f"DB ERROR: {e}")
-#         return {"status": "failed", "message": str(e)}
-
 @router.post("/register")
 def register_student(data: dict, db: Session = Depends(get_db)):
+    usn_clean = str(data.get("usn", "")).strip().upper()
+    
+    # 1. Verification Check: Check if Admin pre-uploaded this USN
+    allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
+    if not allowed:
+        return {"status": "failed", "message": "Your USN is not authorized by Admin. Registration blocked."}
+    
+    # 2. Duplicate Check
+    existing = db.query(Student).filter(Student.usn == usn_clean).first()
+    if existing:
+        return {"status": "failed", "message": "USN already registered"}
+
     try:
-        usn_clean = str(data.get("usn", "")).strip().upper()
-        
-        # 1. Verification Check
-        allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
-        if not allowed:
-            return {"status": "failed", "message": "USN not authorized"}
-        
-        # 2. Duplicate Check
-        existing = db.query(Student).filter(Student.usn == usn_clean).first()
-        if existing:
-            return {"status": "failed", "message": "USN already registered"}
-
         # 3. Handle Biometric Face Processing
-        # ... (your existing face logic) ...
+        image_data = data["image"].split(",")[1]
+        image_bytes = base64.b64decode(image_data)
+        img = face_recognition.load_image_file(io.BytesIO(image_bytes))
+        
+        encodings = face_recognition.face_encodings(img)
+        if len(encodings) == 0:
+            return {"status": "failed", "message": "Face not clear"}
+        
+        face_encoding_str = json.dumps(encodings[0].tolist())
+        hashed_pwd = hash_password(str(data.get("password", "")).strip())
 
-        # 4. Save to Database
-        new_student = Student(...)
+        # 4. Save detailed metrics
+        new_student = Student(
+            name=data.get("name"),
+            usn=usn_clean,
+            year=int(data.get("year")),
+            semester=int(data.get("semester")),
+            section=data.get("section"),
+            password=hashed_pwd,
+            face_encoding=face_encoding_str
+        )
+
         db.add(new_student)
         db.commit()
-        db.refresh(new_student)
+        db.refresh(new_student) 
         
-        # CRITICAL: Ensure you return something here!
         return {"status": "success", "message": "Registered successfully"}
 
     except Exception as e:
         db.rollback()
-        print(f"DEBUG: Critical Error: {e}")
-        # Ensure you return an error response, not just print it
+        print(f"DB ERROR: {e}")
         return {"status": "failed", "message": str(e)}
+
+# @router.post("/register")
+# def register_student(data: dict, db: Session = Depends(get_db)):
+#     try:
+#         usn_clean = str(data.get("usn", "")).strip().upper()
+        
+#         # 1. Verification Check
+#         allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
+#         if not allowed:
+#             return {"status": "failed", "message": "USN not authorized"}
+        
+#         # 2. Duplicate Check
+#         existing = db.query(Student).filter(Student.usn == usn_clean).first()
+#         if existing:
+#             return {"status": "failed", "message": "USN already registered"}
+
+#         # 3. Handle Biometric Face Processing
+#         # ... (your existing face logic) ...
+
+#         # 4. Save to Database
+#         new_student = Student(...)
+#         db.add(new_student)
+#         db.commit()
+#         db.refresh(new_student)
+        
+#         # CRITICAL: Ensure you return something here!
+#         return {"status": "success", "message": "Registered successfully"}
+
+#     except Exception as e:
+#         db.rollback()
+#         print(f"DEBUG: Critical Error: {e}")
+#         # Ensure you return an error response, not just print it
+#         return {"status": "failed", "message": str(e)}
 
 @router.post("/login")
 def login_student(data: dict, db: Session = Depends(get_db)):
