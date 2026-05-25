@@ -148,20 +148,36 @@ router = APIRouter(prefix="/students", tags=["Students"])
 
 @router.post("/register")
 def register_student(data: dict, db: Session = Depends(get_db)):
-    usn_clean = str(data.get("usn", "")).strip().upper()
-    
-    # DEBUG: Print the USN and see what's in the DB
-    print(f"DEBUG: Checking authorization for USN: '{usn_clean}'")
-    
-    allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
-    
-    if not allowed:
-        # Debug: Check if the DB table is empty or has mismatched values
-        all_allowed = db.query(AllowedUSN).all()
-        all_usns = [a.usn for a in all_allowed]
-        print(f"DEBUG: All USNs in database: {all_usns}")
+    try:
+        usn_clean = str(data.get("usn", "")).strip().upper()
         
-        return {"status": "failed", "message": "Your USN is not authorized by Admin."}
+        # 1. Verification Check
+        allowed = db.query(AllowedUSN).filter(AllowedUSN.usn == usn_clean).first()
+        if not allowed:
+            return {"status": "failed", "message": "USN not authorized"}
+        
+        # 2. Duplicate Check
+        existing = db.query(Student).filter(Student.usn == usn_clean).first()
+        if existing:
+            return {"status": "failed", "message": "USN already registered"}
+
+        # 3. Handle Biometric Face Processing
+        # ... (your existing face logic) ...
+
+        # 4. Save to Database
+        new_student = Student(...)
+        db.add(new_student)
+        db.commit()
+        db.refresh(new_student)
+        
+        # CRITICAL: Ensure you return something here!
+        return {"status": "success", "message": "Registered successfully"}
+
+    except Exception as e:
+        db.rollback()
+        print(f"DEBUG: Critical Error: {e}")
+        # Ensure you return an error response, not just print it
+        return {"status": "failed", "message": str(e)}
 
 @router.post("/login")
 def login_student(data: dict, db: Session = Depends(get_db)):
