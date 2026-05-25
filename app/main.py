@@ -218,3 +218,6 @@ def root():
         "status": "online",
         "message": "Smart Attendance System Backend is running!"
     }
+@app.get("/debug/paths")
+def show_paths():
+    return [route.path for route in app.routes]
