@@ -76,7 +76,7 @@ async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db
 # =========================================================================
 # ROUTE 3: UPLOAD POLYGONS
 # =========================================================================
-@router.post("/upload-polygon")
+@router.post("/upload-polygons")
 async def upload_polygon(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         contents = await file.read()
