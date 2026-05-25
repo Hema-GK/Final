@@ -51,6 +51,7 @@ def verify_identity(data: dict, db: Session = Depends(get_db)):
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
     # Match the exact keys sent from your MarkAttendance.jsx payload
+    print(f"DEBUG: Received data: {data}")
     usn = data.get("usn") 
     class_id = data.get("class_id")
     lat = data.get("lat")
