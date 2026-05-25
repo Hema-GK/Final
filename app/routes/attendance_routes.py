@@ -15,8 +15,7 @@ from app.models.timetable import Timetable
 from app.services.location_service import verify_location # Ensure this import works
 
 # router = APIRouter(prefix="/attendance", tags=["Attendance"])
-router = APIRouter(tags=["Attendance"])
-
+router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 # 1. NEW: Identity Verification Endpoint
 @router.post("/verify-identity")
