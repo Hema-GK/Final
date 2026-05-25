@@ -4,20 +4,15 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-# Import database session utility
-from database import get_db 
-
-# Explicitly import models with full package path fallbacks
-try:
-    from app import models
-except ImportError:
-    import models
+# Ensure these point to your correct internal database & models paths
+from app.database import get_db 
+from app.models import timetable, allowed_usn, classroom_polygon
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
 
 # =========================================================================
-# ROUTE 1: UPLOAD TIMETABLE
+# ROUTE 1: UPLOAD TIMETABLE (Expects Schedule Rows - NO USN Columns)
 # =========================================================================
 @router.post("/upload-timetable")
 async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -26,26 +21,18 @@ async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(g
     
     try:
         contents = await file.read()
-        text_data = contents.decode('utf-8-sig')
+        text_data = contents.decode('utf-8-sig') # Strips Excel BOM formatting automatically
         buffer = io.StringIO(text_data)
         reader = csv.DictReader(buffer)
         
+        # Normalize header column names to clean lowercase
         reader.fieldnames = [name.strip().replace('\r', '').replace('\n', '').lower() for name in reader.fieldnames]
         
+        # Strict structural validation for timetable columns
         required_columns = {'section', 'semester', 'day', 'start_time', 'end_time', 'subject', 'teacher_id', 'teacher_name', 'classroom'}
         if not required_columns.issubset(set(reader.fieldnames)):
             missing = required_columns - set(reader.fieldnames)
             raise HTTPException(status_code=400, detail=f"Timetable CSV header mismatch. Missing: {list(missing)}")
-
-        # Smart dynamic search: Find any class in models.py containing 'timetable' case-insensitively
-        TimetableClass = None
-        for attribute_name in dir(models):
-            if "timetable" in attribute_name.lower():
-                TimetableClass = getattr(models, attribute_name)
-                break
-
-        if TimetableClass is None:
-            raise HTTPException(status_code=500, detail="Could not find your Timetable class model inside models.py")
 
         uploaded_records = 0
         for row_number, raw_row in enumerate(reader, start=1):
@@ -55,10 +42,11 @@ async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(g
                 start_str = row['start_time']
                 end_str = row['end_time']
                 
+                # Check formatting strings for time inputs
                 start_time = datetime.strptime(start_str, "%H:%M:%S").time() if len(start_str.split(':')) == 3 else datetime.strptime(start_str, "%H:%M").time()
                 end_time = datetime.strptime(end_str, "%H:%M:%S").time() if len(end_str.split(':')) == 3 else datetime.strptime(end_str, "%H:%M").time()
 
-                new_entry = TimetableClass(
+                new_entry = timetable(
                     semester=row['semester'],
                     section=row['section'],
                     day=row['day'],
@@ -86,7 +74,7 @@ async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(g
 
 
 # =========================================================================
-# ROUTE 2: UPLOAD ALLOWED USNs
+# ROUTE 2: UPLOAD ALLOWED USNs (Expects Authorized Registration Roster)
 # =========================================================================
 @router.post("/upload-usns")
 async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -104,16 +92,6 @@ async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db
         if 'usn' not in reader.fieldnames:
             raise HTTPException(status_code=400, detail="USN CSV structure error. Missing required column: 'usn'")
 
-        # Smart dynamic search: Find any class containing 'usn' or 'eligible' case-insensitively
-        AllowedUSNClass = None
-        for attribute_name in dir(models):
-            if "usn" in attribute_name.lower() or "eligible" in attribute_name.lower():
-                AllowedUSNClass = getattr(models, attribute_name)
-                break
-
-        if AllowedUSNClass is None:
-            raise HTTPException(status_code=500, detail="Could not find your USN roster class model inside models.py")
-
         inserted_count = 0
         for row in reader:
             raw_usn = row.get('usn')
@@ -124,9 +102,9 @@ async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db
             if not usn_val:
                 continue
 
-            exists = db.query(AllowedUSNClass).filter(AllowedUSNClass.usn == usn_val).first()
+            exists = db.query(allowed_usn).filter(allowed_usn.usn == usn_val).first()
             if not exists:
-                new_usn = AllowedUSNClass(usn=usn_val)
+                new_usn = allowed_usn(usn=usn_val)
                 db.add(new_usn)
                 inserted_count += 1
 
@@ -142,7 +120,7 @@ async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db
 
 
 # =========================================================================
-# ROUTE 3: UPLOAD POLYGONS
+# ROUTE 3: UPLOAD POLYGONS (Expects Geofence Coordinates mapping to Room)
 # =========================================================================
 @router.post("/upload-polygon")
 async def upload_polygon(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -155,22 +133,13 @@ async def upload_polygon(file: UploadFile = File(...), db: Session = Depends(get
         buffer = io.StringIO(text_data)
         reader = csv.DictReader(buffer)
 
+        # Sanitize column headers explicitly matching your Polygons.csv structure
         reader.fieldnames = [name.strip().replace('\r', '').replace('\n', '').lower() for name in reader.fieldnames]
 
         required_columns = {'classroom', 'polygon'}
         if not required_columns.issubset(set(reader.fieldnames)):
             missing = required_columns - set(reader.fieldnames)
             raise HTTPException(status_code=400, detail=f"Polygon CSV header mismatch. Missing: {list(missing)}")
-
-        # Smart dynamic search: Find any class containing 'polygon' or 'classroom' case-insensitively
-        PolygonClass = None
-        for attribute_name in dir(models):
-            if "polygon" in attribute_name.lower() or ("classroom" in attribute_name.lower() and attribute_name.lower() != "timetable"):
-                PolygonClass = getattr(models, attribute_name)
-                break
-                
-        if PolygonClass is None:
-            raise HTTPException(status_code=500, detail="Could not find your Polygon class model inside models.py")
 
         inserted_count = 0
         for row_number, raw_row in enumerate(reader, start=1):
@@ -183,11 +152,12 @@ async def upload_polygon(file: UploadFile = File(...), db: Session = Depends(get
                 if not classroom_val or not polygon_val:
                     continue
 
-                exists = db.query(PolygonClass).filter(PolygonClass.classroom == classroom_val).first()
+                # If the classroom geofence boundary already exists, overwrite it; otherwise add new profile record
+                exists = db.query(classroom_polygon).filter(classroom_polygon.classroom == classroom_val).first()
                 if exists:
                     exists.polygon = polygon_val
                 else:
-                    new_polygon = PolygonClass(
+                    new_polygon = classroom_polygon(
                         classroom=classroom_val,
                         polygon=polygon_val
                     )
