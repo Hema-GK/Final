@@ -8,9 +8,9 @@ from datetime import datetime
 from app.database import get_db
 
 # 2. Correct imports for models located in 'backend/app/models/'
-from app.models.timetable import timetable
-from app.models.allowed_usn import allowed_usn
-from app.models.classroom_polygon import classroom_polygon
+from app.models.timetable import Timetable
+from app.models.allowed_usn import AllowedUSN
+from app.models.classroom_polygon import ClassroomPolygon
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
@@ -34,7 +34,7 @@ async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(g
             start_time = datetime.strptime(row['start_time'], "%H:%M").time()
             end_time = datetime.strptime(row['end_time'], "%H:%M").time()
 
-            new_entry = timetable(
+            new_entry = Timetable(
                 semester=row['semester'],
                 section=row['section'],
                 day=row['day'],
@@ -64,8 +64,8 @@ async def upload_usns(file: UploadFile = File(...), db: Session = Depends(get_db
         
         for row in reader:
             usn_val = row['usn'].strip().upper()
-            if not db.query(allowed_usn).filter(allowed_usn.usn == usn_val).first():
-                db.add(allowed_usn(usn=usn_val))
+            if not db.query(AllowedUSN).filter(AllowedUSN.usn == usn_val).first():
+                db.add(AllowedUSN(usn=usn_val))
         db.commit()
         return {"status": "success"}
     except Exception as e:
@@ -86,11 +86,11 @@ async def upload_polygon(file: UploadFile = File(...), db: Session = Depends(get
             room = row['classroom'].strip()
             poly = row['polygon'].strip()
             
-            exists = db.query(classroom_polygon).filter(classroom_polygon.classroom == room).first()
+            exists = db.query(ClassroomPolygon).filter(ClassroomPolygon.classroom == room).first()
             if exists:
                 exists.polygon = poly
             else:
-                db.add(classroom_polygon(classroom=room, polygon=poly))
+                db.add(ClassroomPolygon(classroom=room, polygon=poly))
         db.commit()
         return {"status": "success"}
     except Exception as e:
