@@ -37,8 +37,8 @@ Base.metadata.create_all(bind=engine)
 # "allow_origins=['*']" is fine for development/testing
 
 origins = [
-    "https://smart-attendance-frontend-nu.vercel.app",
-    "https://smart-attendance-frontend-1pb4blm63-hema-gks-projects.vercel.app",
+    "https://smart-attendance-frontend-nu.vercel.app/",
+    "https://smart-attendance-frontend-ocr98rx6f-hema-gks-projects.vercel.app/",
     "http://localhost:5173"  # for local testing
 ]
 app.add_middleware(
