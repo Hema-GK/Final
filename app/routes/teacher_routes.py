@@ -6,7 +6,8 @@ from app.database import get_db
 from app.models.teacher import Teacher
 from app.models.timetable import Timetable
 from app.models.attendance import Attendance
-from app.schemas.teacher_schema import TeacherRegisterfrom app.security import hash_password  # Ensure this matches your function name in security.py
+from app.schemas.teacher_schema import TeacherRegister
+from app.security import hash_password  # Ensure this matches your function name in security.py
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
