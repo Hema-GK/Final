@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Ensure these point to your correct internal database & models paths
 from app.database import get_db 
-from app.models import Timetable, AllowedUSN, ClassroomPolygon 
+from app.models import timetable, allowed_usn, classroom_polygon
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
