@@ -6,12 +6,15 @@ from app.database import get_db
 from app.models.teacher import Teacher
 from app.models.timetable import Timetable
 from app.models.attendance import Attendance
-from app.schemas.teacher_schema import TeacherRegister
+from app.schemas.teacher_schema import TeacherRegisterfrom app.security import hash_password  # Ensure this matches your function name in security.py
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
 
 # REGISTER
+# REGISTER
+
+
 @router.post("/register")
 def register_teacher(data: dict, db: Session = Depends(get_db)):
 
@@ -22,10 +25,13 @@ def register_teacher(data: dict, db: Session = Depends(get_db)):
     if existing:
         return {"status": "Teacher already registered"}
 
+    # Secure the password using your security utility before saving
+    hashed_pwd = hash_password(data["password"])
+
     teacher = Teacher(
         name=data["name"],
         email=data["email"],
-        password=data["password"],
+        password=hashed_pwd,
         class_name=data["class_name"],
         subject=data["subject"]
     )
