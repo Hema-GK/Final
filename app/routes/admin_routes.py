@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 # Ensure these point to your correct internal database & models paths
-from database import get_db 
-from models import Timetable, AllowedUSN, ClassroomPolygon 
+from app.database import get_db 
+from app.models import Timetable, AllowedUSN, ClassroomPolygon 
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
