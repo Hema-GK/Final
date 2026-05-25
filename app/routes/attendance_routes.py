@@ -49,6 +49,7 @@ def verify_identity(data: dict, db: Session = Depends(get_db)):
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
+    print(f"DEBUG: Looking for student using data: {data}")
     # Extract keys
     usn = data.get("usn")
     student_id_old = data.get("student_id")

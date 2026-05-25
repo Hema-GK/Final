@@ -198,6 +198,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/list-routes")
+def list_routes():
+    return [{"path": route.path, "name": route.name} for route in app.routes]
 
 # Register core application routers
 app.include_router(auth_routes.router)
