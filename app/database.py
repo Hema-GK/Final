@@ -11,6 +11,7 @@ bind=engine
 )
 
 Base = declarative_base()
+from app.models.student import Student
 
 def get_db():
   db = SessionLocal()
