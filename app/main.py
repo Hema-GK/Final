@@ -34,10 +34,15 @@ app = FastAPI(title="Smart Attendance System")
 Base.metadata.create_all(bind=engine)
 
 # CORS Configuration - REMOVED trailing slashes to prevent browser CORS blocks
+# origins = [
+#     "https://smart-attendance-frontend-nu.vercel.app",
+#     "https://smart-attendance-frontend-ocr98rx6f-hema-gks-projects.vercel.app",
+#     "http://localhost:5173"  # for local testing
+# ]
 origins = [
+    "https://smart-attendance-frontend-sigma.vercel.app",
     "https://smart-attendance-frontend-nu.vercel.app",
-    "https://smart-attendance-frontend-ocr98rx6f-hema-gks-projects.vercel.app",
-    "http://localhost:5173"  # for local testing
+    "http://localhost:5173"
 ]
 
 app.add_middleware(
