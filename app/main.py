@@ -33,14 +33,13 @@ app = FastAPI(title="Smart Attendance System")
 # Note: Railway/Vercel will use the DATABASE_URL from your env
 Base.metadata.create_all(bind=engine)
 
-# CORS Configuration
-# "allow_origins=['*']" is fine for development/testing
-
+# CORS Configuration - REMOVED trailing slashes to prevent browser CORS blocks
 origins = [
-    "https://smart-attendance-frontend-nu.vercel.app/",
-    "https://smart-attendance-frontend-ocr98rx6f-hema-gks-projects.vercel.app/",
+    "https://smart-attendance-frontend-nu.vercel.app",
+    "https://smart-attendance-frontend-ocr98rx6f-hema-gks-projects.vercel.app",
     "http://localhost:5173"  # for local testing
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins, 
@@ -49,13 +48,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register Routers
+# Register Routers with specific prefixes to match your frontend paths
 app.include_router(auth_routes.router)
 app.include_router(student_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(attendance_routes.router)
-app.include_router(timetable_routes.router)
+app.include_router(timetable_routes.router, prefix="/timetable")  # Added prefix here!
 app.include_router(face_routes.router)
 app.include_router(polygon_routes.router)
 
