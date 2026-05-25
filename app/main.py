@@ -35,9 +35,15 @@ Base.metadata.create_all(bind=engine)
 
 # CORS Configuration
 # "allow_origins=['*']" is fine for development/testing
+
+origins = [
+    "https://smart-attendance-frontend-nu.vercel.app",
+    "https://smart-attendance-frontend-1pb4blm63-hema-gks-projects.vercel.app",
+    "http://localhost:5173"  # for local testing
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=origins, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
