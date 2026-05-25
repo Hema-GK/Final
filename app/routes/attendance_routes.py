@@ -46,31 +46,30 @@ def verify_identity(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-router = APIRouter(prefix="/attendance", tags=["Attendance"])
-
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
-    usn = data.get("usn")
+    # Match the exact keys sent from your MarkAttendance.jsx payload
+    usn = data.get("usn") 
     class_id = data.get("class_id")
     lat = data.get("lat")
     lon = data.get("lon")
     
-    # 1. Fetch Student
+    # 1. Fetch Student using USN
     student = db.query(Student).filter(Student.usn == usn).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # 2. Fetch Timetable for Classroom Name
+    # 2. Get Classroom for Location Check
     timetable = db.query(Timetable).filter(Timetable.id == class_id).first()
     if not timetable:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # 3. Location Verification (Geo-fencing)
+    # 3. Location Verification
     is_valid, message = verify_location(lat, lon, timetable.classroom, db)
     if not is_valid:
         return {"status": "failed", "message": message}
 
-    # 4. Check for duplicates
+    # 4. Check for duplicate attendance
     existing = db.query(Attendance).filter(
         Attendance.student_id == student.id,
         Attendance.timetable_id == class_id,
@@ -80,7 +79,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     if existing:
         return {"status": "failed", "message": "Already marked today"}
 
-    # 5. Mark Attendance
+    # 5. Commit
     new_record = Attendance(
         student_id=student.id,
         timetable_id=class_id,
@@ -90,6 +89,7 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
     db.add(new_record)
     db.commit()
     return {"status": "success", "message": "Attendance marked successfully ✅"}
+
 
 # 3. GET STUDENT HISTORY
 @router.get("/student/{student_id}")
