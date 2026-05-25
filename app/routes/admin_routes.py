@@ -131,6 +131,9 @@ from app.models.timetable import Timetable
 from app.models.allowed_usn import AllowedUSN
 from app.models.classroom_polygon import ClassroomPolygon
 
+
+
+
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
@@ -214,50 +217,67 @@ async def upload_polygon_csv(file: UploadFile = File(...), db: Session = Depends
 
 
 # 3. UPLOAD TIMETABLE DATA
+
+
 @router.post("/upload-timetable")
 async def upload_timetable(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Only CSV files are allowed")
-
+        raise HTTPException(status_code=400, detail="Invalid file type. Only CSV files are allowed.")
+    
     try:
         contents = await file.read()
-        decoded = contents.decode("utf-8")
-        csv_reader = csv.DictReader(io.StringIO(decoded))
+        buffer = io.StringIO(contents.decode('utf-8'))
+        reader = csv.DictReader(buffer)
+        
+        # Strip white spaces and hidden '\r' characters from the CSV headers
+        reader.fieldnames = [name.strip().replace('\r', '').lower() for name in reader.fieldnames]
+        
+        required_columns = {'section', 'semester', 'day', 'start_time', 'end_time', 'subject', 'teacher_id', 'classroom'}
+        if not required_columns.issubset(set(reader.fieldnames)):
+            missing = required_columns - set(reader.fieldnames)
+            raise HTTPException(
+                status_code=400, 
+                detail=f"CSV structure header mismatch. Missing columns: {list(missing)}"
+            )
 
-        for row in csv_reader:
-            if not row.get("semester") or not row["semester"].strip():
-                continue
-
+        uploaded_records = 0
+        for row_number, raw_row in enumerate(reader, start=1):
             try:
-                timetable = Timetable(
-                    semester=int(row["semester"]),
-                    section=row["section"].strip(),
-                    day=row["day"].strip(),
-                    start_time=datetime.strptime(row["start_time"].strip(), "%H:%M").time(),
-                    end_time=datetime.strptime(row["end_time"].strip(), "%H:%M").time(),
-                    subject=row["subject"].strip(),
-                    teacher_id=int(row["teacher_id"]),
-                    teacher_name=row["teacher_name"].strip(),
-                    classroom=row["classroom"].strip(),
-                    length=float(row["length"]),
-                    width=float(row["width"]),
-                    latitude=float(row["latitude"]),
-                    longitude=float(row["longitude"]),
-                    radius=float(row["radius"]),
-                    is_lunch=int(row["is_lunch"]),
-                    temp_latitude=None,
-                    temp_longitude=None
+                # Clean hidden characters from row cell values as well
+                row = {k: v.strip().replace('\r', '') if isinstance(v, str) else v for k, v in raw_row.items()}
+                
+                start_str = row['start_time']
+                end_str = row['end_time']
+                
+                start_time = datetime.strptime(start_str, "%H:%M:%S").time() if len(start_str.split(':')) == 3 else datetime.strptime(start_str, "%H:%M").time()
+                end_time = datetime.strptime(end_str, "%H:%M:%S").time() if len(end_str.split(':')) == 3 else datetime.strptime(end_str, "%H:%M").time()
+
+                new_entry = Timetable(
+                    semester=row['semester'],
+                    section=row['section'],
+                    day=row['day'],
+                    start_time=start_time,
+                    end_time=end_time,
+                    subject=row['subject'],
+                    teacher_id=int(str(row['teacher_id'])),
+                    classroom=row['classroom']
                 )
-                db.add(timetable)
-            except (ValueError, KeyError) as e:
-                print(f"Skipping bad row: {row}. Error: {e}")
-                continue
+                db.add(new_entry)
+                uploaded_records += 1
+            except Exception as row_err:
+                print(f"Error parsing row {row_number}: {row_err}")
+                raise HTTPException(status_code=400, detail=f"Data formatting error at row {row_number}: {str(row_err)}")
+
+        if uploaded_records == 0:
+            raise HTTPException(status_code=400, detail="The uploaded CSV file contains no readable data rows.")
 
         db.commit()
-        return {"status": "success", "message": "Timetable uploaded successfully"}
+        return {"status": "success", "message": f"Successfully parsed and committed {uploaded_records} timetable rows."}
 
+    except HTTPException as http_err:
+        db.rollback()
+        raise http_err
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        file.file.close()
+        print(f"GLOBAL EXCEPTION CAUGHT: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database ingestion pipeline failure: {str(e)}")
