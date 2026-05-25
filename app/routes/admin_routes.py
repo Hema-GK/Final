@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 # 1. Correct import for database.py located in the root 'backend/' folder
-from database import get_db 
+from app.database import get_db
 
 # 2. Correct imports for models located in 'backend/app/models/'
 from app.models.timetable import timetable
