@@ -97,3 +97,8 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
         }
         for row in results
     ]
+
+
+# python -m uvicorn app.main:app --reload
+
+
