@@ -108,32 +108,33 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta # Added timedelta
+from datetime import datetime, timedelta
+from sqlalchemy import func
+
 from app.database import get_db
 from app.models.timetable import Timetable
 from app.models.teacher import Teacher 
-from sqlalchemy import func
+from app.models.classroom_polygon import ClassroomPolygon
 
 router = APIRouter(prefix="/timetable", tags=["Timetable"])
 
 @router.get("/current-class")
 def get_current_class(db: Session = Depends(get_db)):
-    # 1. TIMEZONE FIX: Convert UTC to IST (+5:30)
-    # Railway servers use UTC. This ensures the check matches Indian time.
+    # 1. TIMEZONE MANAGEMENT: Convert server system time to IST (+5:30)
     utc_now = datetime.utcnow()
     ist_now = utc_now + timedelta(hours=5, minutes=30)
     
-    current_time = ist_now.time() # This is a Python 'time' object
-    current_day = ist_now.strftime("%A") # e.g., 'Saturday'
+    current_time = ist_now.time()
+    current_day = ist_now.strftime("%A")
 
-    # 2. Robust Query
-    # We use func.lower() to prevent case-sensitivity issues
+    # 2. Extract live session schedule metrics
     active_class = db.query(
         Timetable.id,
         Timetable.subject,
         Timetable.classroom,
         Timetable.start_time,
         Timetable.end_time,
+        Timetable.section,
         Teacher.name.label("teacher_name")
     ).join(Teacher, Timetable.teacher_id == Teacher.id) \
      .filter(
@@ -143,11 +144,18 @@ def get_current_class(db: Session = Depends(get_db)):
     ).first()
 
     if not active_class:
-        # Helpful debug message for your frontend
         return {
             "status": "No Class", 
             "message": f"Nothing scheduled for {current_day} at {ist_now.strftime('%H:%M')}"
         }
+
+    # 3. Query the precise coordinate boundary data for the classroom location space
+    geo_poly = db.query(ClassroomPolygon).filter(
+        func.lower(ClassroomPolygon.classroom) == active_class.classroom.lower().strip()
+    ).first()
+
+    # Fall back to an empty tracking footprint if polygons haven't been compiled
+    polygon_coords = geo_poly.polygon if geo_poly else []
 
     return {
         "status": "Class Active",
@@ -156,6 +164,8 @@ def get_current_class(db: Session = Depends(get_db)):
             "subject": active_class.subject,
             "teacher_name": active_class.teacher_name,
             "classroom": active_class.classroom,
+            "section": active_class.section,
+            "polygon": polygon_coords,  # Structured coordinate matrix nested seamlessly: [[lat, lon], ...]
             "start_time": active_class.start_time.strftime("%H:%M") if active_class.start_time else None,
             "end_time": active_class.end_time.strftime("%H:%M") if active_class.end_time else None
         }
