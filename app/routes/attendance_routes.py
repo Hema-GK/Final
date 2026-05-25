@@ -49,19 +49,23 @@ def verify_identity(data: dict, db: Session = Depends(get_db)):
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
-    # Match the exact keys sent from your MarkAttendance.jsx payload
-    print(f"DEBUG: Received data: {data}")
-    usn = data.get("usn") 
+    # Extract keys
+    usn = data.get("usn")
+    student_id_old = data.get("student_id")
     class_id = data.get("class_id")
     lat = data.get("lat")
     lon = data.get("lon")
     
-    # 1. Fetch Student using USN
-    student = db.query(Student).filter(Student.usn == usn).first()
+    # 1. Fetch Student (Accepts either USN or ID)
+    if usn:
+        student = db.query(Student).filter(Student.usn == usn).first()
+    else:
+        student = db.query(Student).filter(Student.id == student_id_old).first()
+        
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # 2. Get Classroom for Location Check
+    # 2. Get Classroom
     timetable = db.query(Timetable).filter(Timetable.id == class_id).first()
     if not timetable:
         raise HTTPException(status_code=404, detail="Class not found")
