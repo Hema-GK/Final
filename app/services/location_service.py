@@ -116,11 +116,12 @@ def verify_location(
         )
 
     # GPS tolerance
-    attendance_zone = (
-        classroom_poly.buffer(
-            0.00005
-        )
-    )
+    # attendance_zone = (
+    #     classroom_poly.buffer(
+    #         0.00005
+    #     )
+    # )
+    attendance_zone = classroom_poly.buffer(0.00025)
 
     inside = attendance_zone.contains(
         student_point
@@ -129,6 +130,10 @@ def verify_location(
     print(
         "INSIDE CLASSROOM:",
         inside
+    )
+    print(
+    "GPS ACCURACY BUFFER:",
+    0.00025
     )
 
     print(
