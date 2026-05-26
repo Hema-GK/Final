@@ -26,6 +26,8 @@
 #         return True, "Location verified"
 
 #     return False, "📍 Move slightly inside classroom and try again"
+
+
 from shapely.geometry import Point, Polygon
 from app.models.classroom_polygon import ClassroomPolygon
 import json
@@ -47,11 +49,11 @@ def verify_location(lat, lon, classroom, db):
     try:
         poly_coords = room.polygon
 
-        # Safety: handle stringified JSON if ever stored incorrectly
+        # Handle stringified JSON
         if isinstance(poly_coords, str):
             poly_coords = json.loads(poly_coords)
 
-        # Shapely expects coordinates in (longitude, latitude) order
+        # Convert [lat, lon] -> (lon, lat)
         polygon_points = [
             (float(lon_val), float(lat_val))
             for lat_val, lon_val in poly_coords
@@ -72,16 +74,19 @@ def verify_location(lat, lon, classroom, db):
         print("LOCATION ERROR:", str(e))
         return False, f"Geometry error: {str(e)}"
 
-    # Small GPS tolerance (~2 meters)
-    # Helps when GPS drifts slightly indoors
-    attendance_zone = classroom_poly.buffer(0.00004)
+    # GPS tolerance buffer
+    # 0.00008 ≈ 8–10 meters
+    attendance_zone = classroom_poly.buffer(0.00008)
 
     inside = attendance_zone.contains(student_point)
 
     print("INSIDE CLASSROOM:", inside)
-    print("POLYGON:", polygon_points)
-    print("STUDENT:", (float(lon), float(lat)))
-    print("INSIDE CLASSROOM:", inside)
+
+    try:
+        distance = classroom_poly.distance(student_point)
+        print("DISTANCE FROM POLYGON:", distance)
+    except Exception:
+        pass
 
     if inside:
         return True, "Location verified"
