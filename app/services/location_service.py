@@ -26,13 +26,17 @@
 #         return True, "Location verified"
 
 #     return False, "📍 Move slightly inside classroom and try again"
-
 from shapely.geometry import Point, Polygon
 from app.models.classroom_polygon import ClassroomPolygon
 import json
 
 
 def verify_location(lat, lon, classroom, db):
+    """
+    Verify whether the student's current GPS location
+    lies within the classroom polygon.
+    """
+
     room = db.query(ClassroomPolygon).filter(
         ClassroomPolygon.classroom == classroom
     ).first()
@@ -43,34 +47,43 @@ def verify_location(lat, lon, classroom, db):
     try:
         poly_coords = room.polygon
 
-        # Safety check in case polygon is accidentally stored as a string
+        # Safety: handle stringified JSON if ever stored incorrectly
         if isinstance(poly_coords, str):
             poly_coords = json.loads(poly_coords)
 
-        print("CLASSROOM:", classroom)
-        print("POLYGON:", poly_coords)
-        print("LAT:", lat)
-        print("LON:", lon)
+        # Shapely expects coordinates in (longitude, latitude) order
+        polygon_points = [
+            (float(lon_val), float(lat_val))
+            for lat_val, lon_val in poly_coords
+        ]
 
-        # Create polygon
-        classroom_poly = Polygon(poly_coords)
+        classroom_poly = Polygon(polygon_points)
 
-        # Create student location point
         student_point = Point(
-            float(lat),
-            float(lon)
+            float(lon),
+            float(lat)
         )
+
+        print("CLASSROOM:", classroom)
+        print("POLYGON:", polygon_points)
+        print("STUDENT:", (float(lon), float(lat)))
 
     except Exception as e:
         print("LOCATION ERROR:", str(e))
         return False, f"Geometry error: {str(e)}"
 
-    # Allow some GPS tolerance (~15-20 meters)
-    attendance_zone = classroom_poly.buffer(0.00016)
+    # Small GPS tolerance (~2 meters)
+    # Helps when GPS drifts slightly indoors
+    attendance_zone = classroom_poly.buffer(0.00002)
 
-    print("INSIDE:", attendance_zone.contains(student_point))
+    inside = attendance_zone.contains(student_point)
 
-    if attendance_zone.contains(student_point):
+    print("INSIDE CLASSROOM:", inside)
+    print("POLYGON:", polygon_points)
+    print("STUDENT:", (float(lon), float(lat)))
+    print("INSIDE CLASSROOM:", inside)
+
+    if inside:
         return True, "Location verified"
 
-    return False, "📍 Move slightly inside classroom and try again"
+    return False, "📍 Outside classroom boundary"
