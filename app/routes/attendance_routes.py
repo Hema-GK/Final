@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.attendance import Attendance
 from app.models.student import Student
 from app.models.timetable import Timetable
+from app.models.classroom_polygon import ClassroomPolygon
 from app.services.location_service import verify_location # Ensure this import works
 
 # router = APIRouter(prefix="/attendance", tags=["Attendance"])
@@ -179,3 +180,26 @@ def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
         {"student_id": row.student_id, "present": row.present, "absent": row.absent}
         for row in results
     ]
+
+
+@router.get("/classroom/{classroom}")
+def classroom_details(
+    classroom: str,
+    db: Session = Depends(get_db)
+):
+    room = db.query(ClassroomPolygon).filter(
+        ClassroomPolygon.classroom == classroom
+    ).first()
+
+    if not room:
+        raise HTTPException(
+            status_code=404,
+            detail="Classroom not found"
+        )
+
+    return {
+        "classroom": room.classroom,
+        "polygon": room.polygon,
+        "length": room.room_length_cm,
+        "width": room.room_width_cm
+    }
