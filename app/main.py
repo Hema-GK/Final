@@ -188,7 +188,7 @@ Base.metadata.create_all(bind=engine)
 # Standardized deployment domains
 origins = [
     "https://smart-attendance-frontend-sigma.vercel.app",
-    "https://smart-attendance-frontend-pied.vercel.app/",
+    "https://smart-attendance-frontend-pied.vercel.app",
     "http://localhost:5173"
 ]
 
