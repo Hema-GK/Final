@@ -614,3 +614,18 @@ def class_details(
         "attendance":
         students
     }
+
+@router.get("/history/{teacher_id}")
+def teacher_history(
+    teacher_id:int,
+    db:Session=Depends(get_db)
+):
+
+    classes=db.query(
+        Timetable
+    ).filter(
+        Timetable.teacher_id
+        == teacher_id
+    ).all()
+
+    return classes
