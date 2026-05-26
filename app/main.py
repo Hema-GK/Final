@@ -158,6 +158,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.routes import classroom_routes
+from app.routes import marks_routes
 
 # Import routers from centralized modules
 from app.routes import (
@@ -212,6 +213,11 @@ app.include_router(attendance_routes.router)
 app.include_router(timetable_routes.router)  # Handles checking matching coordinates
 app.include_router(face_routes.router)
 app.include_router(classroom_routes.router)
+
+
+app.include_router(
+    marks_routes.router
+)
 
 @app.on_event("startup")
 def startup_event():

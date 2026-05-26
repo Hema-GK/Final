@@ -1,7 +1,214 @@
+# from fastapi import APIRouter, Depends, HTTPException
+# from sqlalchemy.orm import Session
+# from datetime import datetime, date
+# from sqlalchemy import func
+# import face_recognition
+# import numpy as np
+# import base64
+# import io
+# import json
+
+# from app.database import get_db
+# from app.models.attendance import Attendance
+# from app.models.student import Student
+# from app.models.timetable import Timetable
+# from app.models.classroom_polygon import ClassroomPolygon
+# from app.services.location_service import verify_location # Ensure this import works
+
+# # router = APIRouter(prefix="/attendance", tags=["Attendance"])
+# router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+# # 1. NEW: Identity Verification Endpoint
+# @router.post("/verify-identity")
+# def verify_identity(data: dict, db: Session = Depends(get_db)):
+#     try:
+#         image_str = data.get("image")
+#         if "," in image_str:
+#             image_str = image_str.split(",")[1]
+        
+#         image_bytes = base64.b64decode(image_str)
+#         img = face_recognition.load_image_file(io.BytesIO(image_bytes))
+#         encodings = face_recognition.face_encodings(img)
+        
+#         if not encodings:
+#             return {"status": "failed", "message": "No face detected"}
+        
+#         captured_encoding = encodings[0]
+        
+#         students = db.query(Student).all()
+#         for student in students:
+#             if student.face_encoding:
+#                 known_encoding = np.array(json.loads(student.face_encoding))
+#                 match = face_recognition.compare_faces([known_encoding], captured_encoding)
+#                 if match[0]:
+#                     return {"status": "success", "student": {"name": student.name, "usn": student.usn}}
+        
+#         return {"status": "failed", "message": "Identity not found"}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+# @router.post("/mark")
+# def mark_attendance(data: dict, db: Session = Depends(get_db)):
+
+#     print("RECEIVED DATA:", data)
+
+#     # Accept both old and new payload formats
+#     usn = data.get("usn")
+#     student_id = data.get("student_id")
+
+#     class_id = data.get("timetable_id") or data.get("class_id")
+
+#     lat = data.get("latitude")
+#     if lat is None:
+#         lat = data.get("lat")
+
+#     lon = data.get("longitude")
+#     if lon is None:
+#         lon = data.get("lon")
+
+#     print("USN:", usn)
+#     print("STUDENT_ID:", student_id)
+#     print("CLASS_ID:", class_id)
+#     print("LAT:", lat)
+#     print("LON:", lon)
+
+#     # Find student
+#     if usn:
+#         student = db.query(Student).filter(
+#             Student.usn == usn
+#         ).first()
+#     else:
+#         student = db.query(Student).filter(
+#             Student.id == student_id
+#         ).first()
+
+#     if not student:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Student not found"
+#         )
+
+#     # Find timetable
+#     timetable = db.query(Timetable).filter(
+#         Timetable.id == class_id
+#     ).first()
+
+#     print("TIMETABLE:", timetable)
+
+#     if not timetable:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Class not found"
+#         )
+
+#     # Verify location
+#     is_valid, message = verify_location(
+#         lat,
+#         lon,
+#         timetable.classroom,
+#         db
+#     )
+
+#     if not is_valid:
+#         return {
+#             "status": "failed",
+#             "message": message
+#         }
+
+#     # Prevent duplicate attendance
+#     existing = db.query(Attendance).filter(
+#         Attendance.student_id == student.id,
+#         Attendance.timetable_id == class_id,
+#         func.date(Attendance.timestamp) == date.today()
+#     ).first()
+
+#     if existing:
+#         return {
+#             "status": "failed",
+#             "message": "Already marked today"
+#         }
+
+#     # Save attendance
+#     attendance = Attendance(
+#         student_id=student.id,
+#         timetable_id=class_id,
+#         status="Present",
+#         timestamp=datetime.now()
+#     )
+
+#     db.add(attendance)
+#     db.commit()
+
+#     return {
+#         "status": "success",
+#         "message": "Attendance marked successfully ✅"
+#     }
+
+
+# # 3. GET STUDENT HISTORY
+# @router.get("/student/{student_id}")
+# def get_student_history(student_id: str, db: Session = Depends(get_db)):
+#     history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+#     return [
+#         {
+#             "subject": a.timetable.subject if a.timetable else "Unknown",
+#             "date": a.timestamp.strftime("%Y-%m-%d"),
+#             "status": a.status
+#         }
+#         for a in history
+#     ]
+
+# # 4. GET TEACHER ANALYTICS
+# @router.get("/analytics/{teacher_id}")
+# def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
+#     class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
+#     class_id_list = [c[0] for c in class_ids]
+
+#     if not class_id_list:
+#         return []
+
+#     results = db.query(
+#         Attendance.student_id,
+#         func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
+#         func.count(Attendance.id).filter(Attendance.status == "Absent").label("absent")
+#     ).filter(
+#         Attendance.timetable_id.in_(class_id_list)
+#     ).group_by(Attendance.student_id).all()
+
+#     return [
+#         {"student_id": row.student_id, "present": row.present, "absent": row.absent}
+#         for row in results
+#     ]
+
+
+# @router.get("/classroom/{classroom}")
+# def classroom_details(
+#     classroom: str,
+#     db: Session = Depends(get_db)
+# ):
+#     room = db.query(ClassroomPolygon).filter(
+#         ClassroomPolygon.classroom == classroom
+#     ).first()
+
+#     if not room:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Classroom not found"
+#         )
+
+#     return {
+#         "classroom": room.classroom,
+#         "polygon": room.polygon,
+#         "length": room.room_length_cm,
+#         "width": room.room_width_cm
+#     }
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, date
 from sqlalchemy import func
+from datetime import datetime, date
+
 import face_recognition
 import numpy as np
 import base64
@@ -9,77 +216,166 @@ import io
 import json
 
 from app.database import get_db
+
 from app.models.attendance import Attendance
 from app.models.student import Student
 from app.models.timetable import Timetable
 from app.models.classroom_polygon import ClassroomPolygon
-from app.services.location_service import verify_location # Ensure this import works
 
-# router = APIRouter(prefix="/attendance", tags=["Attendance"])
-router = APIRouter(prefix="/attendance", tags=["Attendance"])
+from app.services.location_service import verify_location
 
-# 1. NEW: Identity Verification Endpoint
+
+router = APIRouter(
+    prefix="/attendance",
+    tags=["Attendance"]
+)
+
+
+# =====================================================
+# VERIFY STUDENT IDENTITY
+# =====================================================
+
 @router.post("/verify-identity")
-def verify_identity(data: dict, db: Session = Depends(get_db)):
+def verify_identity(
+    data: dict,
+    db: Session = Depends(get_db)
+):
+
     try:
+
         image_str = data.get("image")
+
+        if not image_str:
+            raise HTTPException(
+                status_code=400,
+                detail="Image missing"
+            )
+
         if "," in image_str:
             image_str = image_str.split(",")[1]
-        
-        image_bytes = base64.b64decode(image_str)
-        img = face_recognition.load_image_file(io.BytesIO(image_bytes))
-        encodings = face_recognition.face_encodings(img)
-        
-        if not encodings:
-            return {"status": "failed", "message": "No face detected"}
-        
-        captured_encoding = encodings[0]
-        
-        students = db.query(Student).all()
-        for student in students:
-            if student.face_encoding:
-                known_encoding = np.array(json.loads(student.face_encoding))
-                match = face_recognition.compare_faces([known_encoding], captured_encoding)
-                if match[0]:
-                    return {"status": "success", "student": {"name": student.name, "usn": student.usn}}
-        
-        return {"status": "failed", "message": "Identity not found"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+        image_bytes = base64.b64decode(
+            image_str
+        )
+
+        image = face_recognition.load_image_file(
+            io.BytesIO(image_bytes)
+        )
+
+        encodings = face_recognition.face_encodings(
+            image
+        )
+
+        if not encodings:
+            return {
+                "status": "failed",
+                "message": "No face detected"
+            }
+
+        captured_encoding = encodings[0]
+
+        students = db.query(
+            Student
+        ).all()
+
+        for student in students:
+
+            if not student.face_encoding:
+                continue
+
+            try:
+
+                known_encoding = np.array(
+                    json.loads(
+                        student.face_encoding
+                    )
+                )
+
+                match = face_recognition.compare_faces(
+                    [known_encoding],
+                    captured_encoding
+                )
+
+                if match[0]:
+                    return {
+                        "status": "success",
+                        "student": {
+                            "id": student.id,
+                            "name": student.name,
+                            "usn": student.usn,
+                            "semester": student.semester,
+                            "section": student.section
+                        }
+                    }
+
+            except Exception:
+                continue
+
+        return {
+            "status": "failed",
+            "message": "Identity not found"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+# =====================================================
+# MARK ATTENDANCE
+# =====================================================
 
 @router.post("/mark")
-def mark_attendance(data: dict, db: Session = Depends(get_db)):
+def mark_attendance(
+    data: dict,
+    db: Session = Depends(get_db)
+):
 
     print("RECEIVED DATA:", data)
 
-    # Accept both old and new payload formats
     usn = data.get("usn")
     student_id = data.get("student_id")
 
-    class_id = data.get("timetable_id") or data.get("class_id")
+    timetable_id = (
+        data.get("timetable_id")
+        or data.get("class_id")
+    )
 
-    lat = data.get("latitude")
-    if lat is None:
-        lat = data.get("lat")
+    latitude = (
+        data.get("latitude")
+        or data.get("lat")
+    )
 
-    lon = data.get("longitude")
-    if lon is None:
-        lon = data.get("lon")
+    longitude = (
+        data.get("longitude")
+        or data.get("lon")
+    )
 
     print("USN:", usn)
     print("STUDENT_ID:", student_id)
-    print("CLASS_ID:", class_id)
-    print("LAT:", lat)
-    print("LON:", lon)
+    print("CLASS_ID:", timetable_id)
+    print("LAT:", latitude)
+    print("LON:", longitude)
 
-    # Find student
+    # --------------------------
+    # Find Student
+    # --------------------------
+
     if usn:
-        student = db.query(Student).filter(
+
+        student = db.query(
+            Student
+        ).filter(
             Student.usn == usn
         ).first()
+
     else:
-        student = db.query(Student).filter(
+
+        student = db.query(
+            Student
+        ).filter(
             Student.id == student_id
         ).first()
 
@@ -89,9 +385,14 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
             detail="Student not found"
         )
 
-    # Find timetable
-    timetable = db.query(Timetable).filter(
-        Timetable.id == class_id
+    # --------------------------
+    # Find Timetable
+    # --------------------------
+
+    timetable = db.query(
+        Timetable
+    ).filter(
+        Timetable.id == timetable_id
     ).first()
 
     print("TIMETABLE:", timetable)
@@ -102,37 +403,53 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
             detail="Class not found"
         )
 
-    # Verify location
+    # --------------------------
+    # Verify Classroom Location
+    # --------------------------
+
     is_valid, message = verify_location(
-        lat,
-        lon,
+        latitude,
+        longitude,
         timetable.classroom,
         db
     )
 
     if not is_valid:
+
         return {
             "status": "failed",
             "message": message
         }
 
-    # Prevent duplicate attendance
-    existing = db.query(Attendance).filter(
+    # --------------------------
+    # Duplicate Prevention
+    # --------------------------
+
+    existing = db.query(
+        Attendance
+    ).filter(
         Attendance.student_id == student.id,
-        Attendance.timetable_id == class_id,
-        func.date(Attendance.timestamp) == date.today()
+        Attendance.timetable_id == timetable_id,
+        func.date(
+            Attendance.timestamp
+        ) == date.today()
     ).first()
 
     if existing:
+
         return {
             "status": "failed",
-            "message": "Already marked today"
+            "message":
+            "Attendance already marked today"
         }
 
-    # Save attendance
+    # --------------------------
+    # Save Attendance
+    # --------------------------
+
     attendance = Attendance(
         student_id=student.id,
-        timetable_id=class_id,
+        timetable_id=timetable_id,
         status="Present",
         timestamp=datetime.now()
     )
@@ -142,53 +459,137 @@ def mark_attendance(data: dict, db: Session = Depends(get_db)):
 
     return {
         "status": "success",
-        "message": "Attendance marked successfully ✅"
+        "message":
+        "Attendance marked successfully ✅"
     }
 
 
-# 3. GET STUDENT HISTORY
+# =====================================================
+# STUDENT ATTENDANCE HISTORY
+# =====================================================
+
 @router.get("/student/{student_id}")
-def get_student_history(student_id: str, db: Session = Depends(get_db)):
-    history = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+def get_student_history(
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+
+    records = db.query(
+        Attendance
+    ).filter(
+        Attendance.student_id == student_id
+    ).order_by(
+        Attendance.timestamp.desc()
+    ).all()
+
     return [
         {
-            "subject": a.timetable.subject if a.timetable else "Unknown",
-            "date": a.timestamp.strftime("%Y-%m-%d"),
-            "status": a.status
+            "subject":
+            r.timetable.subject
+            if r.timetable else "Unknown",
+
+            "date":
+            r.timestamp.strftime(
+                "%Y-%m-%d"
+            ),
+
+            "status":
+            r.status
         }
-        for a in history
+        for r in records
     ]
 
-# 4. GET TEACHER ANALYTICS
-@router.get("/analytics/{teacher_id}")
-def get_teacher_analytics(teacher_id: int, db: Session = Depends(get_db)):
-    class_ids = db.query(Timetable.id).filter(Timetable.teacher_id == teacher_id).all()
-    class_id_list = [c[0] for c in class_ids]
 
-    if not class_id_list:
+# =====================================================
+# TEACHER ANALYTICS
+# =====================================================
+
+@router.get("/analytics/{teacher_id}")
+def get_teacher_analytics(
+    teacher_id: int,
+    db: Session = Depends(get_db)
+):
+
+    timetable_ids = db.query(
+        Timetable.id
+    ).filter(
+        Timetable.teacher_id == teacher_id
+    ).all()
+
+    timetable_ids = [
+        row[0]
+        for row in timetable_ids
+    ]
+
+    if not timetable_ids:
         return []
 
-    results = db.query(
-        Attendance.student_id,
-        func.count(Attendance.id).filter(Attendance.status == "Present").label("present"),
-        func.count(Attendance.id).filter(Attendance.status == "Absent").label("absent")
-    ).filter(
-        Attendance.timetable_id.in_(class_id_list)
-    ).group_by(Attendance.student_id).all()
+    results = (
+
+        db.query(
+
+            Student.usn,
+
+            func.count(
+                Attendance.id
+            ).filter(
+                Attendance.status ==
+                "Present"
+            ).label("present"),
+
+            func.count(
+                Attendance.id
+            ).filter(
+                Attendance.status ==
+                "Absent"
+            ).label("absent")
+
+        )
+
+        .join(
+            Student,
+            Attendance.student_id ==
+            Student.id
+        )
+
+        .filter(
+            Attendance.timetable_id.in_(
+                timetable_ids
+            )
+        )
+
+        .group_by(
+            Student.usn
+        )
+
+        .all()
+    )
 
     return [
-        {"student_id": row.student_id, "present": row.present, "absent": row.absent}
-        for row in results
+        {
+            "usn": r.usn,
+            "present": r.present,
+            "absent": r.absent
+        }
+        for r in results
     ]
 
+
+# =====================================================
+# CLASSROOM DETAILS
+# =====================================================
 
 @router.get("/classroom/{classroom}")
 def classroom_details(
     classroom: str,
     db: Session = Depends(get_db)
 ):
-    room = db.query(ClassroomPolygon).filter(
-        ClassroomPolygon.classroom == classroom
+
+    room = db.query(
+        ClassroomPolygon
+    ).filter(
+        ClassroomPolygon.classroom ==
+        classroom
     ).first()
 
     if not room:
@@ -198,8 +599,19 @@ def classroom_details(
         )
 
     return {
-        "classroom": room.classroom,
-        "polygon": room.polygon,
-        "length": room.room_length_cm,
-        "width": room.room_width_cm
+
+        "classroom":
+        room.classroom,
+
+        "polygon":
+        room.polygon,
+
+        "display_polygon":
+        room.display_polygon,
+
+        "room_length_cm":
+        room.room_length_cm,
+
+        "room_width_cm":
+        room.room_width_cm
     }
