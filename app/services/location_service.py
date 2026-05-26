@@ -74,7 +74,7 @@ def verify_location(lat, lon, classroom, db):
 
     # Small GPS tolerance (~2 meters)
     # Helps when GPS drifts slightly indoors
-    attendance_zone = classroom_poly.buffer(0.00002)
+    attendance_zone = classroom_poly.buffer(0.00004)
 
     inside = attendance_zone.contains(student_point)
 
