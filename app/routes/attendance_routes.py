@@ -49,53 +49,100 @@ def verify_identity(data: dict, db: Session = Depends(get_db)):
 
 @router.post("/mark")
 def mark_attendance(data: dict, db: Session = Depends(get_db)):
-    print(f"DEBUG: Looking for student using data: {data}")
-    # Extract keys
+
+    print("RECEIVED DATA:", data)
+
+    # Accept both old and new payload formats
     usn = data.get("usn")
-    student_id_old = data.get("student_id")
-    class_id = data.get("class_id")
-    lat = data.get("lat")
-    lon = data.get("lon")
-    
-    # 1. Fetch Student (Accepts either USN or ID)
+    student_id = data.get("student_id")
+
+    class_id = data.get("timetable_id") or data.get("class_id")
+
+    lat = data.get("latitude")
+    if lat is None:
+        lat = data.get("lat")
+
+    lon = data.get("longitude")
+    if lon is None:
+        lon = data.get("lon")
+
+    print("USN:", usn)
+    print("STUDENT_ID:", student_id)
+    print("CLASS_ID:", class_id)
+    print("LAT:", lat)
+    print("LON:", lon)
+
+    # Find student
     if usn:
-        student = db.query(Student).filter(Student.usn == usn).first()
+        student = db.query(Student).filter(
+            Student.usn == usn
+        ).first()
     else:
-        student = db.query(Student).filter(Student.id == student_id_old).first()
-        
+        student = db.query(Student).filter(
+            Student.id == student_id
+        ).first()
+
     if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found"
+        )
 
-    # 2. Get Classroom
-    timetable = db.query(Timetable).filter(Timetable.id == class_id).first()
+    # Find timetable
+    timetable = db.query(Timetable).filter(
+        Timetable.id == class_id
+    ).first()
+
+    print("TIMETABLE:", timetable)
+
     if not timetable:
-        raise HTTPException(status_code=404, detail="Class not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Class not found"
+        )
 
-    # 3. Location Verification
-    is_valid, message = verify_location(lat, lon, timetable.classroom, db)
+    # Verify location
+    is_valid, message = verify_location(
+        lat,
+        lon,
+        timetable.classroom,
+        db
+    )
+
     if not is_valid:
-        return {"status": "failed", "message": message}
+        return {
+            "status": "failed",
+            "message": message
+        }
 
-    # 4. Check for duplicate attendance
+    # Prevent duplicate attendance
     existing = db.query(Attendance).filter(
         Attendance.student_id == student.id,
         Attendance.timetable_id == class_id,
         func.date(Attendance.timestamp) == date.today()
     ).first()
-    
-    if existing:
-        return {"status": "failed", "message": "Already marked today"}
 
-    # 5. Commit
-    new_record = Attendance(
+    if existing:
+        return {
+            "status": "failed",
+            "message": "Already marked today"
+        }
+
+    # Save attendance
+    attendance = Attendance(
         student_id=student.id,
         timetable_id=class_id,
         status="Present",
         timestamp=datetime.now()
     )
-    db.add(new_record)
+
+    db.add(attendance)
     db.commit()
-    return {"status": "success", "message": "Attendance marked successfully ✅"}
+
+    return {
+        "status": "success",
+        "message": "Attendance marked successfully ✅"
+    }
 
 
 # 3. GET STUDENT HISTORY
