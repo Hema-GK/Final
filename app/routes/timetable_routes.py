@@ -87,19 +87,31 @@ from app.models.timetable import Timetable
 from app.models.teacher import Teacher
 from app.models.classroom_polygon import ClassroomPolygon
 
-router = APIRouter(prefix="/timetable", tags=["Timetable"])
+router = APIRouter(
+    prefix="/timetable",
+    tags=["Timetable"]
+)
 
 
 @router.get("/current-class")
-def get_current_class(db: Session = Depends(get_db)):
+def get_current_class(
+    db: Session = Depends(get_db)
+):
     # IST Time
     utc_now = datetime.utcnow()
-    ist_now = utc_now + timedelta(hours=5, minutes=30)
+    ist_now = utc_now + timedelta(
+        hours=5,
+        minutes=30
+    )
 
-    current_time_str = ist_now.strftime("%H:%M:%S")
-    current_day = ist_now.strftime("%A")
+    current_time_str = ist_now.strftime(
+        "%H:%M:%S"
+    )
 
-    # Active Class
+    current_day = ist_now.strftime(
+        "%A"
+    )
+
     active_class = (
         db.query(
             Timetable.id,
@@ -108,14 +120,19 @@ def get_current_class(db: Session = Depends(get_db)):
             Timetable.start_time,
             Timetable.end_time,
             Timetable.section,
-            Teacher.name.label("teacher_name")
+            Teacher.name.label(
+                "teacher_name"
+            )
         )
         .join(
             Teacher,
-            Timetable.teacher_id == Teacher.id
+            Timetable.teacher_id
+            == Teacher.id
         )
         .filter(
-            func.lower(Timetable.day)
+            func.lower(
+                Timetable.day
+            )
             == current_day.lower(),
 
             Timetable.start_time
@@ -131,10 +148,9 @@ def get_current_class(db: Session = Depends(get_db)):
         return {
             "status": "No Class",
             "message":
-            f"Nothing scheduled for {current_day} at {ist_now.strftime('%H:%M:%S')}"
+            f"Nothing scheduled for {current_day} at {current_time_str}"
         }
 
-    # Classroom Data
     geo_poly = (
         db.query(ClassroomPolygon)
         .filter(
@@ -142,23 +158,31 @@ def get_current_class(db: Session = Depends(get_db)):
                 ClassroomPolygon.classroom
             )
             ==
-            active_class.classroom.lower().strip()
+            active_class.classroom
+            .lower()
+            .strip()
         )
         .first()
     )
 
     polygon_coords = []
+    display_polygon = []
 
     room_length_cm = None
     room_width_cm = None
 
     if geo_poly:
 
-        room_length_cm = geo_poly.room_length_cm
-        room_width_cm = geo_poly.room_width_cm
+        room_length_cm = (
+            geo_poly.room_length_cm
+        )
 
+        room_width_cm = (
+            geo_poly.room_width_cm
+        )
+
+        # REAL GPS POLYGON
         try:
-
             if isinstance(
                 geo_poly.polygon,
                 str
@@ -167,19 +191,48 @@ def get_current_class(db: Session = Depends(get_db)):
                     geo_poly.polygon
                 )
             else:
-                polygon_coords = geo_poly.polygon
+                polygon_coords = (
+                    geo_poly.polygon
+                )
 
         except Exception as e:
             print(
                 f"Polygon Parse Error: {e}"
             )
+
             polygon_coords = []
+
+        # DISPLAY POLYGON
+        try:
+            if isinstance(
+                geo_poly.display_polygon,
+                str
+            ):
+                display_polygon = json.loads(
+                    geo_poly.display_polygon
+                )
+            else:
+                display_polygon = (
+                    geo_poly.display_polygon
+                )
+
+        except Exception as e:
+            print(
+                f"Display Polygon Parse Error: {e}"
+            )
+
+            display_polygon = []
 
     return {
         "status": "Class Active",
         "class": {
-            "id": active_class.id,
-            "subject": active_class.subject,
+
+            "id":
+            active_class.id,
+
+            "subject":
+            active_class.subject,
+
             "teacher_name":
             active_class.teacher_name,
 
@@ -189,10 +242,14 @@ def get_current_class(db: Session = Depends(get_db)):
             "section":
             active_class.section,
 
+            # REAL POLYGON
             "polygon":
             polygon_coords,
 
-            # NEW FIELDS
+            # FRONTEND POLYGON
+            "display_polygon":
+            display_polygon,
+
             "room_length_cm":
             room_length_cm,
 
@@ -200,9 +257,13 @@ def get_current_class(db: Session = Depends(get_db)):
             room_width_cm,
 
             "start_time":
-            str(active_class.start_time),
+            str(
+                active_class.start_time
+            ),
 
             "end_time":
-            str(active_class.end_time)
+            str(
+                active_class.end_time
+            )
         }
     }
