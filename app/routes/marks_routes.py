@@ -193,7 +193,8 @@ router = APIRouter(
     prefix="/marks",
     tags=["Marks"]
 )
-
+# Note: removed stray JavaScript line 'const semesterNumber = parseInt(semester);'
+# which caused a syntax error in this Python module.
 
 # =====================================================
 # UPDATE MARKS
@@ -240,16 +241,18 @@ def update_marks(
 # GET STUDENTS OF PARTICULAR SEMESTER + SECTION
 # =====================================================
 
+
 @router.get("/class/{semester}/{section}")
+
 def get_class_marks(
-    semester: int,
+    semester: str,
     section: str,
     db: Session = Depends(get_db)
 ):
 
     students = db.query(Student).filter(
-        Student.semester == semester,
-        Student.section == section
+    Student.semester == semester,
+    Student.section == section
     ).all()
 
     result = []
