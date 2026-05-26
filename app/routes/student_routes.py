@@ -201,3 +201,17 @@ def login_student(data: dict, db: Session = Depends(get_db)):
             "usn": student.usn 
         }
     }
+
+@router.get("/class/{semester}/{section}")
+def get_students_by_class(
+    semester:int,
+    section:str,
+    db:Session=Depends(get_db)
+):
+
+    students=db.query(Student).filter(
+        Student.semester==semester,
+        Student.section==section
+    ).all()
+
+    return students
